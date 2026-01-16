@@ -17,7 +17,7 @@ from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
-
+from subsystems.canon_subsystem import CanonSubsystem
 
 class RobotContainer:
     """
@@ -28,6 +28,9 @@ class RobotContainer:
     """
 
     def __init__(self) -> None:
+        # Subsystem Declaration
+        self.canon = CanonSubsystem()
+
         self._max_speed = (
             1.0 * TunerConstants.speed_at_12_volts
         )  # speed_at_12_volts desired top speed
@@ -143,6 +146,11 @@ class RobotContainer:
 
         self.drivetrain.register_telemetry(
             lambda state: self._logger.telemeterize(state)
+        )
+
+        (self._joystick.a()
+         .whileTrue(self.canon.setTarget(10))
+         .whileFalse(self.canon.setTarget(0))
         )
 
     def getAutonomousCommand(self) -> commands2.Command:
