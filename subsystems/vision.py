@@ -3,7 +3,7 @@ import math
 from phoenix6 import utils
 from wpilib import DataLogManager
 
-from lib.limelight import PoseEstimate, LimelightHelpers
+from modules.limelight import PoseEstimate, LimelightHelpers
 from commands2 import Subsystem
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
 
