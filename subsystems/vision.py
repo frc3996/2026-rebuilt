@@ -1,7 +1,7 @@
 import math
 
 from phoenix6 import utils
-from wpilib import DataLogManager
+from wpilib import DataLogManager, SmartDashboard
 
 from modules.limelight import PoseEstimate, LimelightHelpers
 from commands2 import Subsystem
@@ -25,7 +25,8 @@ class VisionSubsystem(Subsystem):
         super().periodic()
 
         # Reject vision during extreme rotation
-        if abs(self._swerve.pigeon2.get_angular_velocity_z_world().value) > 720:
+        angular_velocity = self._swerve.pigeon2.get_angular_velocity_z_world().value
+        if abs(angular_velocity) > 720:
             return
 
         try:
@@ -57,7 +58,11 @@ class VisionSubsystem(Subsystem):
             # )
 
             # MT2
-            estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
+            # A VOIR
+            # Si teamb blue, lire mettatag blue
+            # Si team red, lire mettatag red + ajouter offset rot de 180 degre
+            # Si c'est le cas, enlever le yaw 180 dans limelight
+            estimate = LimelightHelpers.get_botpose_estimate_wpired_megatag2(
                 self._camera
             )
 
@@ -66,14 +71,16 @@ class VisionSubsystem(Subsystem):
 
             # Optional distance sanity check
             if estimate.avg_tag_dist > 4.125:
+                SmartDashboard.putBoolean("Vision/TooFar", True)
                 return
 
+            SmartDashboard.putBoolean("Vision/TooFar", False)
+            
             self._swerve.add_vision_measurement(
                 estimate.pose,
-                utils.fpga_to_current_time(estimate.timestamp_seconds),
+                estimate.timestamp_seconds,
                 self._get_dynamic_std_devs(estimate),
             )
-
 
         except Exception as e:
             DataLogManager.log(f"Vision processing failed: {e}")
