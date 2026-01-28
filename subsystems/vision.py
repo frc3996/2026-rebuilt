@@ -58,11 +58,7 @@ class VisionSubsystem(Subsystem):
             # )
 
             # MT2
-            # A VOIR
-            # Si teamb blue, lire mettatag blue
-            # Si team red, lire mettatag red + ajouter offset rot de 180 degre
-            # Si c'est le cas, enlever le yaw 180 dans limelight
-            estimate = LimelightHelpers.get_botpose_estimate_wpired_megatag2(
+            estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
                 self._camera
             )
 

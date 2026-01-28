@@ -7,7 +7,19 @@
         {
           "type": "path",
           "data": {
-            "pathName": "Example Path"
+            "pathName": "avancer"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "intake"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "retour"
           }
         }
       ]

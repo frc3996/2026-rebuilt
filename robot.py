@@ -63,6 +63,7 @@ class MyRobot(commands2.TimedCommandRobot):
 
     def autonomousInit(self) -> None:
         """This autonomous runs the autonomous command selected by your RobotContainer class."""
+        self.container._do_pigeon_zero()
         self.autonomousCommand = self.container.getAutonomousCommand()
 
         if self.autonomousCommand:
@@ -77,6 +78,7 @@ class MyRobot(commands2.TimedCommandRobot):
         # teleop starts running. If you want the autonomous to
         # continue until interrupted by another command, remove
         # this line or comment it out.
+        self.container._do_pigeon_zero()
         if self.autonomousCommand:
             commands2.CommandScheduler.getInstance().cancel(self.autonomousCommand)
 

@@ -20,6 +20,12 @@ from wpimath.units import rotationsToRadians
 from subsystems.vision import VisionSubsystem
 
 
+def joystick_filter(value):
+    if abs(value) < 0.05:
+        return 0
+    
+    value = (value * value) * (value / abs(value))
+    return value
 
 class RobotContainer:
     """
@@ -73,6 +79,7 @@ class RobotContainer:
             camera="limelight-back"
         )
 
+        self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings
         self.configureButtonBindings()
 
@@ -91,13 +98,13 @@ class RobotContainer:
             self.drivetrain.apply_request(
                 lambda: (
                     self._drive.with_velocity_x(
-                        -self._joystick.getLeftY() * self._max_speed
+                        joystick_filter(-self._joystick.getLeftY()) * self._max_speed
                     )  # Drive forward with negative Y (forward)
                     .with_velocity_y(
-                        -self._joystick.getLeftX() * self._max_speed
+                        joystick_filter(-self._joystick.getLeftX()) * self._max_speed
                     )  # Drive left with negative X (left)
                     .with_rotational_rate(
-                        -self._joystick.getRightX() * self._max_angular_rate
+                        joystick_filter(-self._joystick.getRightX()) * self._max_angular_rate
                     )  # Drive counterclockwise with negative X (left)
                 )
             )
@@ -114,7 +121,7 @@ class RobotContainer:
         self._joystick.b().whileTrue(
             self.drivetrain.apply_request(
                 lambda: self._point.with_module_direction(
-                    Rotation2d(-self._joystick.getLeftY(), -self._joystick.getLeftX())
+                    Rotation2d(joystick_filter(-self._joystick.getLeftY()), joystick_filter(-self._joystick.getLeftX()))
                 )
             )
         )
