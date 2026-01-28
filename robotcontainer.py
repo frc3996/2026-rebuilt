@@ -12,8 +12,9 @@ from commands2.sysid import SysIdRoutine
 from generated.tuner_constants import TunerConstants
 from telemetry import Telemetry
 
+from pathplannerlib.auto import AutoBuilder
 from phoenix6 import swerve
-from wpilib import DriverStation
+from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 from subsystems.vision import VisionSubsystem
@@ -49,6 +50,12 @@ class RobotContainer:
         )
         self._brake = swerve.requests.SwerveDriveBrake()
         self._point = swerve.requests.PointWheelsAt()
+        self._forward_straight = (
+            swerve.requests.RobotCentric()
+            .with_drive_request_type(
+                swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
+            )
+        )
 
         self._logger = Telemetry(self._max_speed)
 
@@ -56,13 +63,19 @@ class RobotContainer:
 
         self.drivetrain = TunerConstants.create_drivetrain()
 
-        # Configure the button bindings
-        self.configureButtonBindings()
+        # Path follower
+        self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
+        SmartDashboard.putData("Auto Mode", self._auto_chooser)
 
+        # Add vision
         self.limelight = VisionSubsystem(
             swerve=self.drivetrain,
             camera="limelight-back"
         )
+
+        # Configure the button bindings
+        self.configureButtonBindings()
+
 
     def configureButtonBindings(self) -> None:
         """
@@ -106,6 +119,17 @@ class RobotContainer:
             )
         )
 
+        self._joystick.povUp().whileTrue(
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0)
+            )
+        )
+        self._joystick.povDown().whileTrue(
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0)
+            )
+        )
+
         # Run SysId routines when holding back/start and X/Y.
         # Note that each routine should be run exactly once in a single log.
         (self._joystick.back() & self._joystick.y()).whileTrue(
@@ -136,23 +160,26 @@ class RobotContainer:
 
         :returns: the command to run in autonomous
         """
-        # Simple drive forward auton
-        idle = swerve.requests.Idle()
-        return cmd.sequence(
-            # Reset our field centric heading to match the robot
-            # facing away from our alliance station wall (0 deg).
-            self.drivetrain.runOnce(
-                lambda: self.drivetrain.seed_field_centric(Rotation2d.fromDegrees(0))
-            ),
-            # Then slowly drive forward (away from us) for 5 seconds.
-            self.drivetrain.apply_request(
-                lambda: (
-                    self._drive.with_velocity_x(0.5)
-                    .with_velocity_y(0)
-                    .with_rotational_rate(0)
-                )
-            )
-            .withTimeout(5.0),
-            # Finally idle for the rest of auton
-            self.drivetrain.apply_request(lambda: idle)
-        )
+
+        return self._auto_chooser.getSelected()
+
+        # # Simple drive forward auton
+        # idle = swerve.requests.Idle()
+        # return cmd.sequence(
+        #     # Reset our field centric heading to match the robot
+        #     # facing away from our alliance station wall (0 deg).
+        #     self.drivetrain.runOnce(
+        #         lambda: self.drivetrain.seed_field_centric(Rotation2d.fromDegrees(0))
+        #     ),
+        #     # Then slowly drive forward (away from us) for 5 seconds.
+        #     self.drivetrain.apply_request(
+        #         lambda: (
+        #             self._drive.with_velocity_x(0.5)
+        #             .with_velocity_y(0)
+        #             .with_rotational_rate(0)
+        #         )
+        #     )
+        #     .withTimeout(5.0),
+        #     # Finally idle for the rest of auton
+        #     self.drivetrain.apply_request(lambda: idle)
+        # )
