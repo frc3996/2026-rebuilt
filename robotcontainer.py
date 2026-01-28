@@ -18,6 +18,8 @@ from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 from subsystems.vision import VisionSubsystem
+from subsystems.climb import Climb
+import commands.climb_commands
 
 
 def joystick_filter(value):
@@ -78,6 +80,8 @@ class RobotContainer:
             swerve=self.drivetrain,
             camera="limelight-back"
         )
+
+        self.climb = Climb()
 
         self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings
@@ -159,6 +163,13 @@ class RobotContainer:
 
         self.drivetrain.register_telemetry(
             lambda state: self._logger.telemeterize(state)
+        )
+
+        # Climb function
+        # self.climb.setDefaultCommand(self.climb.demo_idle())
+        # commands.climb_commands.RunClimb
+        commands2.button.JoystickButton(
+            self.climb, self._joystick.y().onTrue(commands.climb_commands.RunClimb())
         )
 
     def getAutonomousCommand(self) -> commands2.Command:
