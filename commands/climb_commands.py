@@ -1,7 +1,7 @@
 import commands2
 
 
-class RunClimb(commands2.RepeatCommand):
+class RunClimb(commands2.Command):
     
     def __init__(self) -> None:
         print("STARTING CLIMB SEQUENCE")

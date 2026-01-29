@@ -1,4 +1,5 @@
 import math
+from typing import override
 
 from phoenix6 import utils
 from wpilib import DataLogManager, SmartDashboard
@@ -7,7 +8,6 @@ from modules.limelight import PoseEstimate, LimelightHelpers
 from commands2 import Subsystem
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
 
-
 class VisionSubsystem(Subsystem):
     """
     Vision subsystem optimized for a single Limelight.
@@ -15,12 +15,12 @@ class VisionSubsystem(Subsystem):
     """
 
     def __init__(self, swerve: CommandSwerveDrivetrain, camera: str):
-        if not isinstance(camera, str):
-            raise TypeError("Camera name must be a string")
+        self._swerve: CommandSwerveDrivetrain = swerve
+        self._camera:str   = camera
+        SmartDashboard.putBoolean("Vision/UseMegaTag2", False)
+        super().__init__()
 
-        self._swerve = swerve
-        self._camera = camera
-
+    @override
     def periodic(self):
         super().periodic()
 
@@ -39,29 +39,20 @@ class VisionSubsystem(Subsystem):
                 0, 0, 0, 0, 0
             )
 
-            # ## MT1
-            # estimate_mt1 = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
-            #     self._camera
-            # )
-            # if estimate is None or estimate.tag_count == 0:
-            #     return
-            # # Optional distance sanity check
-            # if estimate.avg_tag_dist > 4.125:
-            #     return
+            # MT1
+            estimate = None
+            use_mt2 = SmartDashboard.getBoolean("Vision/UseMegaTag2", True)
+            if use_mt2:
+                # MT2
+                estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
+                    self._camera
+                )
+            else:
+                estimate = LimelightHelpers.get_botpose_estimate_wpiblue(
+                    self._camera
+                )
 
-            # stddev_x, stddev_y, stddev_rot = self._get_dynamic_std_devs(estimate)
-
-            # self._swerve.add_vision_measurement(
-            #     estimate.pose,
-            #     utils.fpga_to_current_time(estimate.timestamp_seconds),
-            #     (99999, 99999, stddev_rot),
-            # )
-
-            # MT2
-            estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
-                self._camera
-            )
-
+            # Rejection and Update
             if estimate is None or estimate.tag_count == 0:
                 return
 
@@ -72,6 +63,9 @@ class VisionSubsystem(Subsystem):
 
             SmartDashboard.putBoolean("Vision/TooFar", False)
             
+            if not use_mt2:
+                self._swerve.seed_field_centric(estimate.pose.rotation())
+
             self._swerve.add_vision_measurement(
                 estimate.pose,
                 estimate.timestamp_seconds,

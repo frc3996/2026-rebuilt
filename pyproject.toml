@@ -1,7 +1,14 @@
-#
-# Use this configuration file to control what RobotPy packages are installed
-# on your RoboRIO
-#
+[project]
+name = "2026-rebuilt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "phoenix6>=26.1.1",
+    "robotpy-pathplannerlib>=2026.1.2",
+    "robotpy[commands2,pathplannerlib]>=2026.2.1",
+]
 
 [tool.robotpy]
 

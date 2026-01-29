@@ -83,7 +83,7 @@ class RobotContainer:
 
         self.climb = Climb()
 
-        self._do_pigeon_zero = self.drivetrain.seed_field_centric
+        # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings
         self.configureButtonBindings()
 
