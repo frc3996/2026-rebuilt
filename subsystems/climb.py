@@ -1,24 +1,37 @@
 
+import wpilib
 from commands2 import Subsystem, Command
+from wpilib.shuffleboard import Shuffleboard
 
-class Climb(Subsystem):
+class ClimbSubsystem(Subsystem):
     """
     Vision subsystem optimized for a single Limelight.
     No state-based tag filtering — always accepts all visible tags.
     """
 
     def __init__(self):
-        super().__init__()
+        # Initialization
+        self.solenoid = wpilib.Solenoid(
+            moduleType=wpilib.PneumaticsModuleType.CTREPCM, channel=2
+        )
+
+        # Compressor connected to a PH
+        self.compressor = wpilib.Compressor(wpilib.PneumaticsModuleType.CTREPCM)
+
+        tab = Shuffleboard.getTab("Climber")
+        tab.add("Solenoid", self.solenoid)
+        tab.add("Compressor", self.compressor)
+        tab.addBoolean("Compressor Active", lambda: self.compressor.isEnabled())
 
     def periodic(self):
+        # Called on every loop
         pass
 
-    def demo_idle(self) -> Command:
-        print("idling")
-        return False
+    def setState(self, state: bool):
+        self.solenoid.set(state)
 
-    def run_climb(self) -> Command:
-        print("Climbing!")
+    def simulationPeriodic(self):
+        # Called on every simulation loop
+        pass
 
-    def climb_done(self) -> bool:
-        return False
+
