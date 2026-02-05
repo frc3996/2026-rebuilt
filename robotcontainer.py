@@ -166,6 +166,7 @@ class RobotContainer:
         )
 
         # Climb function
+        #self._joystick.a().whileTrue(RunClimb(self.climb))
         self._joystick.a().whileTrue(RunClimb(self.climb))
 
     def getAutonomousCommand(self) -> commands2.Command:

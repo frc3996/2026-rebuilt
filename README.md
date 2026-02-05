@@ -37,7 +37,7 @@ class SubSystemName(Subsystem):
 
 import commands2
 
-class RunClimb(commands2.Command):
+class MyCommand(commands2.Command):
     # Example command    
     def __init__(self, speed) -> None:
         # Initilization
@@ -74,3 +74,60 @@ class RobotContainer:
         commands2.button.JoystickButton(self._joystick, 1).whileTrue(COMMAND_TO_CALL)
 
 ```
+
+
+
+# Components
+
+## Swerve
+Finnish
+
+## Vision
+Finnish
+
+## Shooter
+- moteur_gauche_1
+- moteur_gauche_2
+- moteur_droite_1
+- moteur_droite_2
+
+## Hood
+- moteur
+
+## Indexeur
+- moteur_gauche
+- moteur_droite
+- moteur_convoyeur
+
+## Climb
+- Solenoide
+
+## Intake
+- moteur_descendre
+- moteur_intake
+
+
+
+# Commandes
+## Intake
+- Sort l'intake
+- Intake
+- Stop quand on lache le bouton (remonte pas)
+
+## Climb [Gauche, Droite]
+- Sort piston
+- Run path
+- Stop quand on lache le bouton et piston remonte
+
+## Drive Intake Forward
+- Robot roule avec l'intake pointe dans sa direction de deplacement
+
+## PreSpin
+- Accelere le shooter a la bonne vitesse
+- Stop quand bouton lache
+
+## Shoot [Gauche, Droite, Hub]
+- Robot vise la cible
+- Ajuste hood
+- Quand vitesse bonne, shoot
+- Stop quand on lache boutton
