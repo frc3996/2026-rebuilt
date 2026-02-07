@@ -12,14 +12,18 @@ from commands2.sysid import SysIdRoutine
 from generated.tuner_constants import TunerConstants
 from telemetry import Telemetry
 
-from pathplannerlib.auto import AutoBuilder
+from pathplannerlib.auto import AutoBuilder, PathPlannerPath
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 from subsystems.vision import VisionSubsystem
 from subsystems.climb import ClimbSubsystem
-from commands.climb_commands import RunClimb
+from commands.climb_commands import ExtendClimb, RetractClimb
+from subsystems.hood import HoodSubSystem
+from subsystems.indexer import IndexerSubSystem
+from subsystems.intake import IntakeSubSystem
+from subsystems.shooter import ShooterSubSystem
 
 
 def joystick_filter(value):
@@ -81,14 +85,22 @@ class RobotContainer:
             camera="limelight-back"
         )
 
-        self.climb = ClimbSubsystem()
+        self.climber = ClimbSubsystem()
+        # self.shooter = ShooterSubSystem()
+        # self.hood = HoodSubSystem()
+        # self.intake = IntakeSubSystem()
+        # self.indexer = IndexerSubSystem()
+
+        self.climb_left_path = PathPlannerPath.fromPathFile("climb_left")
+        self.climb_right_path = PathPlannerPath.fromPathFile("climb_right")
 
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings
-        self.configureButtonBindings()
+        self.configureSwerveButtonBindings()
+        self.configureOtherButtonBindings()
 
 
-    def configureButtonBindings(self) -> None:
+    def configureSwerveButtonBindings(self) -> None:
         """
         Use this method to define your button->command mappings. Buttons can be created by
         instantiating a :GenericHID or one of its subclasses (Joystick or XboxController),
@@ -130,31 +142,31 @@ class RobotContainer:
             )
         )
 
-        self._joystick.povUp().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0)
-            )
-        )
-        self._joystick.povDown().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0)
-            )
-        )
+        # self._joystick.povUp().whileTrue(
+        #     self.drivetrain.apply_request(
+        #         lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0)
+        #     )
+        # )
+        # self._joystick.povDown().whileTrue(
+        #     self.drivetrain.apply_request(
+        #         lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0)
+        #     )
+        # )
 
         # Run SysId routines when holding back/start and X/Y.
         # Note that each routine should be run exactly once in a single log.
-        (self._joystick.back() & self._joystick.y()).whileTrue(
-            self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kForward)
-        )
-        (self._joystick.back() & self._joystick.x()).whileTrue(
-            self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
-        )
-        (self._joystick.start() & self._joystick.y()).whileTrue(
-            self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
-        )
-        (self._joystick.start() & self._joystick.x()).whileTrue(
-            self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
-        )
+        # (self._joystick.back() & self._joystick.y()).whileTrue(
+        #     self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kForward)
+        # )
+        # (self._joystick.back() & self._joystick.x()).whileTrue(
+        #     self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
+        # )
+        # (self._joystick.start() & self._joystick.y()).whileTrue(
+        #     self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
+        # )
+        # (self._joystick.start() & self._joystick.x()).whileTrue(
+        #     self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
+        # )
 
         # reset the field-centric heading on left bumper press
         self._joystick.leftBumper().onTrue(
@@ -165,9 +177,12 @@ class RobotContainer:
             lambda state: self._logger.telemeterize(state)
         )
 
+    def configureOtherButtonBindings(self):
         # Climb function
-        #self._joystick.a().whileTrue(RunClimb(self.climb))
-        self._joystick.a().whileTrue(RunClimb(self.climb))
+        self._joystick.povUp().onTrue(ExtendClimb(self.climber))
+        self._joystick.povDown().onTrue(RetractClimb(self.climber))
+        self._joystick.povLeft().whileTrue(AutoBuilder.followPath(self.climb_left_path))
+        self._joystick.povRight().whileTrue(AutoBuilder.followPath(self.climb_right_path))
 
     def getAutonomousCommand(self) -> commands2.Command:
         """

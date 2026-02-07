@@ -13,7 +13,7 @@ from wpilib.shuffleboard import Shuffleboard
 
 class SubSystemName(Subsystem):
     """
-    Subsystem Demo
+    Demo Subsystem
     """
     def __init__(self):
         # Initilization
@@ -28,6 +28,7 @@ class SubSystemName(Subsystem):
 
     def simulationPeriodic(self):
         # Called on every simulation loop
+        pass
 
 ```
 
