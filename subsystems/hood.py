@@ -12,7 +12,7 @@ class HoodSubSystem(Subsystem):
         self.motor = rev.SparkMax(45, rev.SparkMax.MotorType.kBrushless)
         self.encoder = self.motor.getEncoder()
         self.closed_loop = self.motor.getClosedLoopController()
-        
+
         self.global_config = rev.SparkBaseConfig()
         self.global_config.smartCurrentLimit(50)
         self.global_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
@@ -33,7 +33,7 @@ class HoodSubSystem(Subsystem):
         tab.addDouble("Position Current [NA]", lambda: self.get_current_position())
 
     def get_current_position(self):
-        self.encoder.getPosition()
+        return self.encoder.getPosition()
 
     def set_target_position(self, target_position):
         self.closed_loop.setReference(target_position, rev.SparkBase.ControlType.kPosition, rev.ClosedLoopSlot.kSlot0)

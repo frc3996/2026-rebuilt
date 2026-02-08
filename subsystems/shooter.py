@@ -41,18 +41,18 @@ class ShooterSubSystem(Subsystem):
         self.motor_right_1_config.apply(self.global_config)
         self.motor_right_1_config.follow(40, False)
         self.motor_right_1.configure(self.motor_right_1_config, rev.ResetMode.kResetSafeParameters, rev.PersistMode.kPersistParameters)
-        
+
         self.motor_right_2_config = rev.SparkBaseConfig()
         self.motor_right_2_config.apply(self.global_config)
         self.motor_right_2_config.follow(40, False)
         self.motor_right_2.configure(self.motor_right_2_config, rev.ResetMode.kResetSafeParameters, rev.PersistMode.kPersistParameters)
-        
+
         tab = Shuffleboard.getTab("Shooter")
         tab.addDouble("Velocity Target [RPM]", lambda: self.motor_left_1_closed_loop.getSetpoint())
         tab.addDouble("Velocity Current [RPM]", lambda: self.get_current_speed())
 
     def get_current_speed(self):
-        self.motor_left_1_encoder.getVelocity()
+        return self.motor_left_1_encoder.getVelocity()
 
     def set_target_speed(self, target_velocity):
         self.motor_left_1_closed_loop.setReference(target_velocity, rev.SparkBase.ControlType.kVelocity, rev.ClosedLoopSlot.kSlot0)

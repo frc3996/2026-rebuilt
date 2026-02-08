@@ -47,15 +47,15 @@ class IntakeSubSystem(Subsystem):
         tab.addDouble("UpDown Amp. Current [A]", lambda: self.up_down_motor.getOutputCurrent())
         tab.addDouble("Roller Velocity Target [RPM]", lambda: self.roller_closed_loop.getSetpoint())
         tab.addDouble("Roller Velocity Current [RPM]", lambda: self.get_roller_current_speed())
-           
+
     def get_up_down_current_amp(self):
-        self.up_down_motor.getOutputCurrent()
+        return self.up_down_motor.getOutputCurrent()
 
     def set_up_down_target_amp(self, target_amp):
         self.up_down_closed_loop.setReference(target_amp, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot0)
-        
+
     def get_roller_current_speed(self):
-        self.roller_encoder.getVelocity()
+        return self.roller_encoder.getVelocity()
 
     def set_roller_target_speed(self, target_velocity):
         self.roller_closed_loop.setReference(target_velocity, rev.SparkBase.ControlType.kVelocity, rev.ClosedLoopSlot.kSlot0)
