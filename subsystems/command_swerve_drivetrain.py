@@ -1,10 +1,11 @@
+import math
+from typing import Callable, overload
+
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
-import math
 from pathplannerlib.auto import AutoBuilder, RobotConfig
 from pathplannerlib.controller import PIDConstants, PPHolonomicDriveController
 from phoenix6 import SignalLogger, swerve, units, utils
-from typing import Callable, overload
 from wpilib import DriverStation, Notifier, RobotController
 from wpilib.sysid import SysIdRoutineLog
 from wpimath.geometry import Pose2d, Rotation2d
@@ -235,26 +236,32 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
     def _configure_auto_builder(self):
         config = RobotConfig.fromGUISettings()
         AutoBuilder.configure(
-            lambda: self.get_state().pose,   # Supplier of current robot pose
-            self.reset_pose,                 # Consumer for seeding pose against auto
-            lambda: self.get_state().speeds, # Supplier of current robot speeds
+            lambda: self.get_state().pose,  # Supplier of current robot pose
+            self.reset_pose,  # Consumer for seeding pose against auto
+            lambda: self.get_state().speeds,  # Supplier of current robot speeds
             # Consumer of ChassisSpeeds and feedforwards to drive the robot
             lambda speeds, feedforwards: self.set_control(
-                self._apply_robot_speeds
-                .with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
-                .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
-                .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
+                self._apply_robot_speeds.with_speeds(
+                    ChassisSpeeds.discretize(speeds, 0.020)
+                )
+                .with_wheel_force_feedforwards_x(
+                    feedforwards.robotRelativeForcesXNewtons
+                )
+                .with_wheel_force_feedforwards_y(
+                    feedforwards.robotRelativeForcesYNewtons
+                )
             ),
             PPHolonomicDriveController(
                 # PID constants for translation
                 PIDConstants(10.0, 0.0, 0.0),
                 # PID constants for rotation
-                PIDConstants(7.0, 0.0, 0.0)
+                PIDConstants(7.0, 0.0, 0.0),
             ),
             config,
             # Assume the path needs to be flipped for Red vs Blue, this is normally the case
-            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
-            self # Subsystem for requirements
+            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue)
+            == DriverStation.Alliance.kRed,
+            self,  # Subsystem for requirements
         )
 
     def apply_request(
@@ -351,7 +358,7 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
             self,
             vision_robot_pose,
             utils.fpga_to_current_time(timestamp),
-            vision_measurement_std_devs
+            vision_measurement_std_devs,
         )
 
     def sample_pose_at(self, timestamp: units.second) -> Pose2d | None:
@@ -363,4 +370,6 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
         :returns: The pose at the given timestamp (or None if the buffer is empty).
         :rtype: Pose2d | None
         """
-        return TunerSwerveDrivetrain.sample_pose_at(self, utils.fpga_to_current_time(timestamp))
+        return TunerSwerveDrivetrain.sample_pose_at(
+            self, utils.fpga_to_current_time(timestamp)
+        )

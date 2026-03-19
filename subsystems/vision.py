@@ -1,12 +1,13 @@
 import math
 from typing import override
 
+from commands2 import Subsystem
 from phoenix6 import utils
 from wpilib import DataLogManager, SmartDashboard
 
-from modules.limelight import PoseEstimate, LimelightHelpers
-from commands2 import Subsystem
+from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
+
 
 class VisionSubsystem(Subsystem):
     """
@@ -16,7 +17,7 @@ class VisionSubsystem(Subsystem):
 
     def __init__(self, swerve: CommandSwerveDrivetrain, camera: str):
         self._swerve: CommandSwerveDrivetrain = swerve
-        self._camera:str   = camera
+        self._camera: str = camera
         SmartDashboard.putBoolean("Vision/UseMegaTag2", False)
         super().__init__()
 
@@ -34,9 +35,7 @@ class VisionSubsystem(Subsystem):
 
             # Provide robot orientation for MegaTag2
             LimelightHelpers.set_robot_orientation(
-                self._camera,
-                state.pose.rotation().degrees(),
-                0, 0, 0, 0, 0
+                self._camera, state.pose.rotation().degrees(), 0, 0, 0, 0, 0
             )
 
             # MT1
@@ -48,9 +47,7 @@ class VisionSubsystem(Subsystem):
                     self._camera
                 )
             else:
-                estimate = LimelightHelpers.get_botpose_estimate_wpiblue(
-                    self._camera
-                )
+                estimate = LimelightHelpers.get_botpose_estimate_wpiblue(self._camera)
 
             # Rejection and Update
             if estimate is None or estimate.tag_count == 0:
@@ -62,7 +59,7 @@ class VisionSubsystem(Subsystem):
                 return
 
             SmartDashboard.putBoolean("Vision/TooFar", False)
-            
+
             if not use_mt2:
                 self._swerve.seed_field_centric(estimate.pose.rotation())
 
@@ -87,11 +84,10 @@ class VisionSubsystem(Subsystem):
             return 0.5, 0.5, 0.5
 
         avg_dist = (
-            sum(f.dist_to_camera for f in estimate.raw_fiducials)
-            / estimate.tag_count
+            sum(f.dist_to_camera for f in estimate.raw_fiducials) / estimate.tag_count
         )
 
-        factor = 0.9 + (avg_dist ** 2 / 30)
+        factor = 0.9 + (avg_dist**2 / 30)
 
         return (
             0.5 * factor,

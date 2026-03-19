@@ -7,13 +7,13 @@ requires-python = ">=3.14"
 dependencies = [
     "phoenix6>=26.1.1",
     "robotpy-pathplannerlib>=2026.1.2",
-    "robotpy[commands2,pathplannerlib]>=2026.2.1",
+    "robotpy[commands2]>=2026.2.1",
 ]
 
 [tool.robotpy]
 
 # Version of robotpy this project depends on
-robotpy_version = "2026.2.1"
+robotpy_version = "2026.2.2"
 
 # Which core WPILib components should be installed
 # -> equivalent to `pip install robotpy[extra1, ...]
