@@ -1,6 +1,6 @@
 from commands2 import Command
 from wpimath.geometry import Pose2d, Translation2d
-from wpilib import SmartDashboard
+import ntcore
 import math
 
 class ShootAtHub(Command):
@@ -14,152 +14,106 @@ class ShootAtHub(Command):
     4. When shooter is ready (±200 RPM), feed ball with indexer
     """
 
-    # Hub position on field (center of hub) - adjust these for your field
-    # For 2022 Rapid React: hub is at center of field
-    HUB_POSITION = Translation2d(8.23, 4.115)  # meters (center of field for 2022)
+    HUB_POSITION = Translation2d(8.23, 4.115)  # meters (center of field)
 
-    # Ballistics constants - TUNE THESE FOR YOUR ROBOT
-    SHOOTER_TARGET_RPM = 4000  # Target shooter speed
-    SHOOTER_TOLERANCE_RPM = 200  # Acceptable velocity error
+    SHOOTER_TARGET_RPM = 4000
+    SHOOTER_TOLERANCE_RPM = 200
 
-    # Lookup table for distance -> hood angle (degrees)
-    # Format: (distance_meters, hood_angle_degrees, shooter_rpm)
+    # Lookup table: (distance_meters, hood_motor_turns, shooter_rpm)
+    # Hood values are in motor turns from home position — tune on robot
     SHOT_TABLE = [
-        (1.0, 20.0, 3500),   # Close shot
-        (2.0, 25.0, 3800),   # Medium shot
-        (3.0, 30.0, 4200),   # Far shot
-        (4.0, 35.0, 4500),   # Very far shot
-        (5.0, 40.0, 4800),   # Max range shot
+        (1.0, 1.0, 3500),   # Close shot
+        (2.0, 2.0, 3800),   # Medium shot
+        (3.0, 3.0, 4200),   # Far shot
+        (4.0, 3.5, 4500),   # Very far shot
+        (5.0, 4.0, 4800),   # Max range shot
     ]
 
-    def __init__(self, shooter, indexer, hood, vision, drivetrain):
-        """
-        Initialize the shoot at hub command.
-
-        :param shooter: ShooterSubSystem instance
-        :param indexer: IndexerSubSystem instance
-        :param hood: HoodSubSystem instance
-        :param vision: VisionSubsystem instance
-        :param drivetrain: CommandSwerveDrivetrain instance
-        """
+    def __init__(self, shooter, kicker, indexer, hood, vision, drivetrain):
         super().__init__()
         self.shooter = shooter
+        self.kicker = kicker
         self.indexer = indexer
         self.hood = hood
         self.vision = vision
         self.drivetrain = drivetrain
 
-        self.addRequirements(shooter, indexer, hood)
+        self.addRequirements(shooter, kicker, indexer, hood)
+        # vision and drivetrain are intentionally NOT requirements — the parallel
+        # snap-angle command in robotcontainer owns the drivetrain while this runs.
 
         self.target_rpm = self.SHOOTER_TARGET_RPM
         self.target_hood_angle = 0.0
         self.feeding = False
 
+        table = ntcore.NetworkTableInstance.getDefault().getTable("Shoot")
+        self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
+        self._target_rpm_pub = table.getDoubleTopic("Target RPM").publish()
+        self._current_rpm_pub = table.getDoubleTopic("Current RPM").publish()
+        self._rpm_error_pub = table.getDoubleTopic("RPM Error").publish()
+        self._target_hood_pub = table.getDoubleTopic("Target Hood Angle").publish()
+        self._feeding_pub = table.getBooleanTopic("Feeding").publish()
+
     def initialize(self):
-        """Called when command starts."""
         self.feeding = False
 
-        # Calculate distance to hub
         distance = self.calculate_distance_to_hub()
-        SmartDashboard.putNumber("Shoot/DistanceToHub", distance)
+        self._distance_pub.set(distance)
 
-        # Compute ballistics
         self.target_rpm, self.target_hood_angle = self.compute_ballistics(distance)
 
-        # Set shooter to target speed
         self.shooter.set_target_speed(self.target_rpm)
-
-        # Set hood to target angle
         self.hood.set_target_position(self.target_hood_angle)
 
-        SmartDashboard.putNumber("Shoot/TargetRPM", self.target_rpm)
-        SmartDashboard.putNumber("Shoot/TargetHoodAngle", self.target_hood_angle)
-        SmartDashboard.putBoolean("Shoot/Feeding", False)
+        self._target_rpm_pub.set(self.target_rpm)
+        self._target_hood_pub.set(self.target_hood_angle)
+        self._feeding_pub.set(False)
 
     def execute(self):
-        """Called repeatedly while command is scheduled."""
-        # Check if shooter is at target speed
         current_rpm = self.shooter.get_current_speed()
         rpm_error = abs(current_rpm - self.target_rpm)
 
-        SmartDashboard.putNumber("Shoot/CurrentRPM", current_rpm)
-        SmartDashboard.putNumber("Shoot/RPMError", rpm_error)
+        self._current_rpm_pub.set(current_rpm)
+        self._rpm_error_pub.set(rpm_error)
 
-        # If shooter is ready and we haven't started feeding yet
         if rpm_error < self.SHOOTER_TOLERANCE_RPM and not self.feeding:
             self.feeding = True
-            SmartDashboard.putBoolean("Shoot/Feeding", True)
+            self._feeding_pub.set(True)
 
-            # Start feeding with conveyor and kickers
-            self.indexer.set_conveyor_target_speed(2000)  # RPM for conveyor
-            self.indexer.set_left_kicker_target_speed(3000)  # RPM for left kicker
-            self.indexer.set_right_kicker_target_speed(3000)  # RPM for right kicker
+            self.indexer.set_target_output(0.5)
+            self.kicker.set_target_speed(3000)
 
     def end(self, interrupted: bool):
-        """Called when command ends."""
-        # Stop shooter
-        self.shooter.set_target_speed(0)
+        self.shooter.stop()
+        self.kicker.stop()
+        self.indexer.stop()
+        self.hood.stow()
 
-        # Stop indexer
-        self.indexer.set_conveyor_target_speed(0)
-        self.indexer.set_left_kicker_target_speed(0)
-        self.indexer.set_right_kicker_target_speed(0)
-
-        SmartDashboard.putBoolean("Shoot/Feeding", False)
+        self._feeding_pub.set(False)
 
     def isFinished(self) -> bool:
-        """
-        Command finishes when ball has been fed for sufficient time.
-        You might want to add a sensor or timer here.
-        For now, it runs until interrupted (whileTrue).
-        """
-        # Could add a timer or sensor check here
-        # For example: return self.feeding and self.timer.hasElapsed(0.5)
         return False
 
     def calculate_distance_to_hub(self) -> float:
-        """
-        Calculate distance from robot to hub using odometry.
-
-        :return: Distance in meters
-        """
-        # Get robot pose from drivetrain
         robot_pose = self.drivetrain.get_state().pose
         robot_translation = robot_pose.translation()
-
-        # Calculate distance to hub
-        distance = robot_translation.distance(self.HUB_POSITION)
-
-        return distance
+        return robot_translation.distance(self.HUB_POSITION)
 
     def compute_ballistics(self, distance: float) -> tuple[float, float]:
-        """
-        Compute shooter RPM and hood angle based on distance to target.
-        Uses interpolation from shot lookup table.
-
-        :param distance: Distance to hub in meters
-        :return: Tuple of (shooter_rpm, hood_angle_degrees)
-        """
-        # If distance is less than minimum in table
         if distance <= self.SHOT_TABLE[0][0]:
             return self.SHOT_TABLE[0][2], self.SHOT_TABLE[0][1]
 
-        # If distance is greater than maximum in table
         if distance >= self.SHOT_TABLE[-1][0]:
             return self.SHOT_TABLE[-1][2], self.SHOT_TABLE[-1][1]
 
-        # Find the two points to interpolate between
         for i in range(len(self.SHOT_TABLE) - 1):
             dist1, angle1, rpm1 = self.SHOT_TABLE[i]
             dist2, angle2, rpm2 = self.SHOT_TABLE[i + 1]
 
             if dist1 <= distance <= dist2:
-                # Linear interpolation
                 t = (distance - dist1) / (dist2 - dist1)
                 hood_angle = angle1 + t * (angle2 - angle1)
                 shooter_rpm = rpm1 + t * (rpm2 - rpm1)
-
                 return shooter_rpm, hood_angle
 
-        # Fallback (shouldn't reach here)
         return self.SHOOTER_TARGET_RPM, 30.0

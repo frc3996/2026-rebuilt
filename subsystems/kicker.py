@@ -3,18 +3,18 @@ import rev
 from commands2 import Subsystem
 
 
-class ShooterSubSystem(Subsystem):
+class KickerSubSystem(Subsystem):
     """
-    Shooter Subsystem — two motors on a shared flywheel shaft.
-    Motor 41 follows motor 40.
+    Kicker Subsystem — two motors on a shared shaft feeding balls into the shooter.
+    Motor 51 follows motor 50.
     """
 
     def __init__(self):
-        self.motor = rev.SparkMax(40, rev.SparkMax.MotorType.kBrushless)
+        self.motor = rev.SparkMax(50, rev.SparkMax.MotorType.kBrushless)
         self.motor_encoder = self.motor.getEncoder()
         self.motor_closed_loop = self.motor.getClosedLoopController()
 
-        self.follower_motor = rev.SparkMax(41, rev.SparkMax.MotorType.kBrushless)
+        self.follower_motor = rev.SparkMax(51, rev.SparkMax.MotorType.kBrushless)
 
         self.motor_config = rev.SparkBaseConfig()
         self.motor_config.smartCurrentLimit(50)
@@ -38,7 +38,7 @@ class ShooterSubSystem(Subsystem):
         self.follower_config.smartCurrentLimit(50)
         self.follower_config.secondaryCurrentLimit(60)
         self.follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        self.follower_config.follow(40, False)
+        self.follower_config.follow(50, True)
         self.follower_motor.configure(
             self.follower_config,
             rev.ResetMode.kResetSafeParameters,
@@ -47,7 +47,7 @@ class ShooterSubSystem(Subsystem):
 
         self._target_speed = 0.0
 
-        table = ntcore.NetworkTableInstance.getDefault().getTable("Shooter")
+        table = ntcore.NetworkTableInstance.getDefault().getTable("Kicker")
         self._velocity_pub = table.getDoubleTopic("Velocity RPM").publish()
         self._target_pub = table.getDoubleTopic("Target RPM").publish()
         self._amps_pub = table.getDoubleTopic("Amps").publish()

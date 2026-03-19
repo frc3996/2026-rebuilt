@@ -20,10 +20,14 @@ from wpimath.units import rotationsToRadians
 from subsystems.vision import VisionSubsystem
 from subsystems.climb import ClimbSubsystem
 from commands.climb_commands import ExtendClimb, RetractClimb
+from commands.auto_home import AutoHome
+from commands.home_hood import HomeHood
+from commands.home_intake import HomeIntake
 from commands.shoot_at_hub import ShootAtHub
 from subsystems.hood import HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
 from subsystems.intake import IntakeSubSystem
+from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 
 
@@ -100,7 +104,14 @@ class RobotContainer:
         self.shooter = ShooterSubSystem()
         self.hood = HoodSubSystem()
         self.intake = IntakeSubSystem()
+        self.kicker = KickerSubSystem()
         self.indexer = IndexerSubSystem()
+
+        # Default commands — ensure motors stop when no command is running
+        self.shooter.setDefaultCommand(self.shooter.run(self.shooter.stop))
+        self.kicker.setDefaultCommand(self.kicker.run(self.kicker.stop))
+        self.indexer.setDefaultCommand(self.indexer.run(self.indexer.stop))
+        self.hood.setDefaultCommand(self.hood.run(self.hood.stow))
 
         self.climb_left_path = PathPlannerPath.fromPathFile("climb_left")
         self.climb_right_path = PathPlannerPath.fromPathFile("climb_right")
@@ -108,7 +119,8 @@ class RobotContainer:
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings
         self.configureSwerveButtonBindings()
-        self.configureOtherButtonBindings()
+        self.configureTestBindings()
+        # self.configureCompetitionBindings()
 
 
     def configureSwerveButtonBindings(self) -> None:
@@ -199,7 +211,67 @@ class RobotContainer:
             lambda state: self._logger.telemeterize(state)
         )
 
-    def configureOtherButtonBindings(self):
+    def configureTestBindings(self):
+        """
+        Test bindings for verifying individual subsystem behaviors.
+        All on joystick 2 (operator controller):
+          A      = toggle climb extend/retract
+          B      = toggle intake arm deploy/retract
+          X      = toggle intake roller
+          Y      = toggle shooter + kicker
+          RB     = toggle conveyor
+        """
+        # A: Toggle climb
+        self._joystick_2.a().toggleOnTrue(
+            cmd.startEnd(
+                lambda: self.climber.setState(True),
+                lambda: self.climber.setState(False),
+                self.climber,
+            )
+        )
+
+        # B: Toggle intake arm deploy/retract
+        self._joystick_2.b().toggleOnTrue(
+            cmd.startEnd(
+                lambda: self.intake.set_up_down_target_amp(10),
+                lambda: self.intake.set_up_down_target_amp(0),
+                self.intake,
+            )
+        )
+
+        # X: Toggle intake roller
+        self._joystick_2.x().toggleOnTrue(
+            cmd.startEnd(
+                lambda: self.intake.set_roller_target_speed(3000),
+                lambda: self.intake.set_roller_target_speed(0),
+                self.intake,
+            )
+        )
+
+        # Y: Toggle shooter + kicker
+        self._joystick_2.y().toggleOnTrue(
+            cmd.startEnd(
+                lambda: (self.shooter.set_target_speed(3000), self.kicker.set_target_speed(3000)),
+                lambda: (self.shooter.stop(), self.kicker.stop()),
+                self.shooter, self.kicker,
+            )
+        )
+
+        # Right bumper: Toggle conveyor
+        self._joystick_2.rightBumper().toggleOnTrue(
+            cmd.startEnd(
+                lambda: self.indexer.set_target_output(0.5),
+                lambda: self.indexer.stop(),
+                self.indexer,
+            )
+        )
+
+        # POV Left: Home hood — drives into hard stop, resets encoder to 0
+        self._joystick_2.povLeft().onTrue(HomeHood(self.hood))
+        # POV Right: Home intake arm — drives into hard stop, resets encoder to 0
+        self._joystick_2.povRight().onTrue(HomeIntake(self.intake))
+
+    def configureCompetitionBindings(self):
         # Right trigger: Shoot at hub while aiming
         self._joystick_1.rightTrigger().whileTrue(ParallelCommandGroup(
             # Aim robot at hub
@@ -210,7 +282,7 @@ class RobotContainer:
                 .with_velocity_y(joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed)
             ),
             # Shoot with ballistics calculation
-            ShootAtHub(self.shooter, self.indexer, self.hood, self.limelight, self.drivetrain)
+            ShootAtHub(self.shooter, self.kicker, self.indexer, self.hood, self.limelight, self.drivetrain)
         ))
 
 
@@ -265,6 +337,10 @@ class RobotContainer:
         angle_radians = math.atan2(dy, dx)
 
         return Rotation2d(angle_radians)
+
+    def getAutoHomeCommand(self) -> commands2.Command:
+        """Returns a command that homes the hood and intake arm sequentially."""
+        return AutoHome(self.hood, self.intake)
 
     def getAutonomousCommand(self) -> commands2.Command:
         """

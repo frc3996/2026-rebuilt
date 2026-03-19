@@ -1,29 +1,36 @@
 
 import commands2
 from subsystems.shooter import ShooterSubSystem
-from subsystems.hood import HoodSubSystem
+from subsystems.kicker import KickerSubSystem
 from subsystems.indexer import IndexerSubSystem
 
 class Shoot(commands2.Command):
-    # Example command    
-    def __init__(self, shooter_subsystem: ShooterSubSystem, ) -> None:
-        # Initilization
-        self.shooter_subsystem = shooter_subsystem
-        self.addRequirements(self.shooter_subsystem)
+    """
+    Basic shoot command for testing — runs shooter, kicker, and conveyor
+    at fixed speeds without ballistics or auto-aim.
+    """
+    TEST_SHOOTER_RPM = 3000
+    TEST_KICKER_RPM = 3000
+    TEST_CONVEYOR_OUTPUT = 0.5  # Duty cycle (-1.0 to 1.0)
+
+    def __init__(self, shooter: ShooterSubSystem, kicker: KickerSubSystem, indexer: IndexerSubSystem) -> None:
+        self.shooter = shooter
+        self.kicker = kicker
+        self.indexer = indexer
+        self.addRequirements(self.shooter, self.kicker, self.indexer)
 
     def initialize(self):
-        print("START CLIMBING")
-        self.climb_subsystem.setState(True)
-    
+        self.shooter.set_target_speed(self.TEST_SHOOTER_RPM)
+        self.kicker.set_target_speed(self.TEST_KICKER_RPM)
+        self.indexer.set_target_output(self.TEST_CONVEYOR_OUTPUT)
+
     def execute(self):
-        # Called every loop when the command is active
         pass
 
     def end(self, interrupted: bool):
-        # Called when the command is done executing or interrupted
-        self.climb_subsystem.setState(False)
-        print("DONE CLIMBING")
-        
+        self.shooter.stop()
+        self.kicker.stop()
+        self.indexer.stop()
+
     def isFinished(self) -> bool:
-        # Should return True when the command is done 
         return False
