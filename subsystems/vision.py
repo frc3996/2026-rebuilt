@@ -5,6 +5,7 @@ import ntcore
 from commands2 import Subsystem
 from wpilib import DataLogManager
 
+from constants import VISION_MAX_TAG_DISTANCE, VISION_MAX_ANGULAR_VELOCITY
 from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
 
@@ -30,11 +31,9 @@ class VisionSubsystem(Subsystem):
 
     @override
     def periodic(self):
-        super().periodic()
-
         # Reject vision during extreme rotation
         angular_velocity = self._swerve.pigeon2.get_angular_velocity_z_world().value
-        if abs(angular_velocity) > 720:
+        if abs(angular_velocity) > VISION_MAX_ANGULAR_VELOCITY:
             return
 
         try:
@@ -57,7 +56,7 @@ class VisionSubsystem(Subsystem):
             if estimate is None or estimate.tag_count == 0:
                 return
 
-            if estimate.avg_tag_dist > 4.125:
+            if estimate.avg_tag_dist > VISION_MAX_TAG_DISTANCE:
                 self._too_far_pub.set(True)
                 return
 

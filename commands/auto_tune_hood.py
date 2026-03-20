@@ -32,23 +32,21 @@ class AutoTuneHoodCommand(commands2.Command):
 
     def initialize(self) -> None:
         if not self.hood.is_homed or not self.hood.limits_set:
-            print("[Hood AutoTune] Cannot run — hood not homed or limits not set")
             self._timed_out = True
             return
 
         self._midpoint = (self.hood.min_rotations + self.hood.max_rotations) / 2.0
         self._crossings = []
-        self._above = self.hood.encoder.getPosition() >= self._midpoint
+        self._above = self.hood.get_current_position() >= self._midpoint
         self._timed_out = False
         self._timer.restart()
 
         # Start initial direction
         output = RELAY_OUTPUT if not self._above else -RELAY_OUTPUT
-        self.hood.motor.set(output)
-        print(f"[Hood AutoTune] Starting — midpoint={self._midpoint:.3f} turns")
+        self.hood.set_duty_cycle(output)
 
     def execute(self) -> None:
-        pos = self.hood.encoder.getPosition()
+        pos = self.hood.get_current_position()
         now_above = pos >= self._midpoint
 
         # Detect zero-crossing
@@ -58,23 +56,20 @@ class AutoTuneHoodCommand(commands2.Command):
 
         # Bang-bang: drive toward midpoint
         if now_above:
-            self.hood.motor.set(-RELAY_OUTPUT)
+            self.hood.set_duty_cycle(-RELAY_OUTPUT)
         else:
-            self.hood.motor.set(RELAY_OUTPUT)
+            self.hood.set_duty_cycle(RELAY_OUTPUT)
 
         if self._timer.hasElapsed(AUTOTUNE_TIMEOUT_SECONDS):
             self._timed_out = True
-            print("[Hood AutoTune] Timed out")
 
     def end(self, interrupted: bool) -> None:
-        self.hood.motor.set(0)
+        self.hood.stop()
 
         if interrupted or self._timed_out:
-            print("[Hood AutoTune] Aborted — gains NOT applied")
             return
 
         if len(self._crossings) < 2:
-            print("[Hood AutoTune] Not enough crossings — gains NOT applied")
             return
 
         # Compute average period from crossing timestamps
@@ -93,12 +88,7 @@ class AutoTuneHoodCommand(commands2.Command):
         kd = 0.075 * ku * tu
         ki = 0.0
 
-        self.hood.closed_loop.setP(kp)
-        self.hood.closed_loop.setI(ki)
-        self.hood.closed_loop.setD(kd)
-
-        print(f"[Hood AutoTune] Gains applied — P={kp:.5f}, I={ki:.5f}, D={kd:.5f}")
-        print(f"[Hood AutoTune] Tu={tu:.4f}s, Ku={ku:.5f}")
+        self.hood.set_pid_gains(kp, ki, kd)
 
     def isFinished(self) -> bool:
         if self._timed_out:

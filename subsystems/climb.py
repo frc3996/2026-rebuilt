@@ -10,6 +10,7 @@ class ClimbSubsystem(Subsystem):
     """
 
     def __init__(self):
+        super().__init__()
         self.solenoid = wpilib.Solenoid(
             moduleType=wpilib.PneumaticsModuleType.CTREPCM, channel=PneumaticChannels.CLIMBER_SOLENOID
         )

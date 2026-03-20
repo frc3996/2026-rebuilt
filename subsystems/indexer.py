@@ -11,15 +11,17 @@ class IndexerSubSystem(Subsystem):
     """
 
     def __init__(self):
-        self.conveyor_motor = rev.SparkMax(CANIds.INDEXER, rev.SparkMax.MotorType.kBrushed)
+        super().__init__()
+        self._motor = rev.SparkMax(CANIds.INDEXER, rev.SparkMax.MotorType.kBrushed)
 
-        self.conveyor_config = rev.SparkBaseConfig()
-        self.conveyor_config.inverted(True)
-        self.conveyor_config.smartCurrentLimit(30)
-        self.conveyor_config.secondaryCurrentLimit(40)
-        self.conveyor_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        self.conveyor_motor.configure(
-            self.conveyor_config,
+        config = rev.SparkBaseConfig()
+        config.inverted(True)  # positive = toward kicker (upward)
+        config.voltageCompensation(12.0)
+        config.smartCurrentLimit(30)
+        config.secondaryCurrentLimit(40)
+        config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
+        self._motor.configure(
+            config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
@@ -33,15 +35,15 @@ class IndexerSubSystem(Subsystem):
     def set_target_output(self, output):
         """Set conveyor duty cycle output (-1.0 to 1.0)."""
         self._target_output = max(-1.0, min(output, 1.0))
-        self.conveyor_motor.set(self._target_output)
+        self._motor.set(self._target_output)
 
     def stop(self):
         self._target_output = 0.0
-        self.conveyor_motor.stopMotor()
+        self._motor.stopMotor()
 
     def periodic(self):
         self._output_pub.set(self._target_output)
-        self._amps_pub.set(self.conveyor_motor.getOutputCurrent())
+        self._amps_pub.set(self._motor.getOutputCurrent())
 
     def simulationPeriodic(self):
         pass

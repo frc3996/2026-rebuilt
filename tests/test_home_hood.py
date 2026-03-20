@@ -15,8 +15,6 @@ from subsystems.hood import (
 def hood():
     h = MagicMock()
     h.is_homed = False
-    h.motor = MagicMock()
-    h.encoder = MagicMock()
     return h
 
 
@@ -31,13 +29,13 @@ def cmd(hood):
 
 
 def _simulate_stall(hood):
-    hood.motor.getOutputCurrent.return_value = STALL_CURRENT_THRESHOLD + 1.0
-    hood.encoder.getVelocity.return_value = STALL_VELOCITY_THRESHOLD / 2.0
+    hood.get_output_current.return_value = STALL_CURRENT_THRESHOLD + 1.0
+    hood.get_velocity.return_value = STALL_VELOCITY_THRESHOLD / 2.0
 
 
 def _simulate_no_stall(hood):
-    hood.motor.getOutputCurrent.return_value = 1.0
-    hood.encoder.getVelocity.return_value = 100.0
+    hood.get_output_current.return_value = 1.0
+    hood.get_velocity.return_value = 100.0
 
 
 def test_stall_confirmed_after_n_cycles(cmd, hood):
@@ -53,8 +51,7 @@ def test_stall_confirmed_after_n_cycles(cmd, hood):
     assert cmd.isFinished()
 
     cmd.end(interrupted=False)
-    hood.encoder.setPosition.assert_called_once_with(0.0)
-    assert hood.is_homed
+    hood.reset_encoder.assert_called_once()
     hood.enable_soft_limits.assert_called_once()
 
 
@@ -93,7 +90,7 @@ def test_timeout_does_not_home(cmd, hood):
     assert cmd.isFinished()
 
     cmd.end(interrupted=False)
-    hood.encoder.setPosition.assert_not_called()
+    hood.reset_encoder.assert_not_called()
     assert not hood.is_homed
     hood.enable_soft_limits.assert_not_called()
 
@@ -107,6 +104,6 @@ def test_interrupted_does_not_home(cmd, hood):
         cmd.execute()
 
     cmd.end(interrupted=True)
-    hood.encoder.setPosition.assert_not_called()
+    hood.reset_encoder.assert_not_called()
     assert not hood.is_homed
     hood.enable_soft_limits.assert_not_called()

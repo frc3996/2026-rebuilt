@@ -30,12 +30,11 @@ class HomeHood(commands2.Command):
         self._timed_out = False
         self._timer.restart()
         self.hood.disable_soft_limits()
-        self.hood.motor.setVoltage(HOMING_VOLTAGE)
-        print("[Hood] Homing started")
+        self.hood.set_voltage(HOMING_VOLTAGE)
 
     def execute(self) -> None:
-        current = self.hood.motor.getOutputCurrent()
-        velocity = abs(self.hood.encoder.getVelocity())
+        current = self.hood.get_output_current()
+        velocity = abs(self.hood.get_velocity())
 
         if current > STALL_CURRENT_THRESHOLD and velocity < STALL_VELOCITY_THRESHOLD:
             self._stall_counter += 1
@@ -44,17 +43,12 @@ class HomeHood(commands2.Command):
 
         if self._timer.hasElapsed(HOMING_TIMEOUT_SECONDS):
             self._timed_out = True
-            print("[Hood] Homing timed out — aborting")
 
     def end(self, interrupted: bool) -> None:
-        self.hood.motor.set(0)
+        self.hood.stop()
         if not interrupted and not self._timed_out:
-            self.hood.encoder.setPosition(0.0)
-            self.hood.is_homed = True
+            self.hood.reset_encoder()
             self.hood.enable_soft_limits()
-            print("[Hood] Stall confirmed — encoder zeroed, homing complete")
-        else:
-            print("[Hood] Homing did not complete — encoder NOT zeroed")
 
     def isFinished(self) -> bool:
         if self._timed_out:

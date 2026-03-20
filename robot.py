@@ -7,7 +7,6 @@
 
 import wpilib
 import commands2
-import typing
 
 from robotcontainer import RobotContainer
 
@@ -20,7 +19,7 @@ class MyRobot(commands2.TimedCommandRobot):
     has an implementation of robotPeriodic which runs the scheduler for you
     """
 
-    autonomousCommand: typing.Optional[commands2.Command] = None
+    autonomousCommand: commands2.Command | None = None
 
     def robotInit(self) -> None:
         """

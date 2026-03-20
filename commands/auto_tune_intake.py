@@ -32,22 +32,20 @@ class AutoTuneIntakeCommand(commands2.Command):
 
     def initialize(self) -> None:
         if not self.intake.homed or not self.intake.limits_set:
-            print("[Intake AutoTune] Cannot run — arm not homed or limits not set")
             self._timed_out = True
             return
 
         self._midpoint = (self.intake.min_rotations + self.intake.max_rotations) / 2.0
         self._crossings = []
-        self._above = self.intake.up_down_encoder.getPosition() >= self._midpoint
+        self._above = self.intake.get_arm_position() >= self._midpoint
         self._timed_out = False
         self._timer.restart()
 
         output = RELAY_OUTPUT if not self._above else -RELAY_OUTPUT
-        self.intake.up_down_motor.set(output)
-        print(f"[Intake AutoTune] Starting — midpoint={self._midpoint:.3f} turns")
+        self.intake.set_arm_duty_cycle(output)
 
     def execute(self) -> None:
-        pos = self.intake.up_down_encoder.getPosition()
+        pos = self.intake.get_arm_position()
         now_above = pos >= self._midpoint
 
         if now_above != self._above:
@@ -55,23 +53,20 @@ class AutoTuneIntakeCommand(commands2.Command):
             self._above = now_above
 
         if now_above:
-            self.intake.up_down_motor.set(-RELAY_OUTPUT)
+            self.intake.set_arm_duty_cycle(-RELAY_OUTPUT)
         else:
-            self.intake.up_down_motor.set(RELAY_OUTPUT)
+            self.intake.set_arm_duty_cycle(RELAY_OUTPUT)
 
         if self._timer.hasElapsed(AUTOTUNE_TIMEOUT_SECONDS):
             self._timed_out = True
-            print("[Intake AutoTune] Timed out")
 
     def end(self, interrupted: bool) -> None:
-        self.intake.up_down_motor.set(0)
+        self.intake.stop_arm()
 
         if interrupted or self._timed_out:
-            print("[Intake AutoTune] Aborted — gains NOT applied")
             return
 
         if len(self._crossings) < 2:
-            print("[Intake AutoTune] Not enough crossings — gains NOT applied")
             return
 
         periods = [
@@ -87,12 +82,7 @@ class AutoTuneIntakeCommand(commands2.Command):
         kd = 0.075 * ku * tu
         ki = 0.0
 
-        self.intake.up_down_closed_loop.setP(kp)
-        self.intake.up_down_closed_loop.setI(ki)
-        self.intake.up_down_closed_loop.setD(kd)
-
-        print(f"[Intake AutoTune] Gains applied — P={kp:.5f}, I={ki:.5f}, D={kd:.5f}")
-        print(f"[Intake AutoTune] Tu={tu:.4f}s, Ku={ku:.5f}")
+        self.intake.set_arm_pid_gains(kp, ki, kd)
 
     def isFinished(self) -> bool:
         if self._timed_out:

@@ -30,12 +30,11 @@ class HomeIntake(commands2.Command):
         self._timed_out = False
         self._timer.restart()
         self.intake.disable_soft_limits()
-        self.intake.up_down_motor.setVoltage(HOMING_VOLTAGE)
-        print("[Intake] Homing started")
+        self.intake.set_arm_voltage(HOMING_VOLTAGE)
 
     def execute(self) -> None:
-        current = self.intake.up_down_motor.getOutputCurrent()
-        velocity = abs(self.intake.up_down_encoder.getVelocity())
+        current = self.intake.get_arm_current()
+        velocity = abs(self.intake.get_arm_velocity())
 
         if current > STALL_CURRENT_THRESHOLD and velocity < STALL_VELOCITY_THRESHOLD:
             self._stall_counter += 1
@@ -44,17 +43,12 @@ class HomeIntake(commands2.Command):
 
         if self._timer.hasElapsed(HOMING_TIMEOUT_SECONDS):
             self._timed_out = True
-            print("[Intake] Homing timed out — aborting")
 
     def end(self, interrupted: bool) -> None:
-        self.intake.up_down_motor.set(0)
+        self.intake.stop_arm()
         if not interrupted and not self._timed_out:
-            self.intake.up_down_encoder.setPosition(0.0)
-            self.intake.homed = True
+            self.intake.reset_arm_encoder()
             self.intake.enable_soft_limits()
-            print("[Intake] Stall confirmed — encoder zeroed, homing complete")
-        else:
-            print("[Intake] Homing did not complete — encoder NOT zeroed")
 
     def isFinished(self) -> bool:
         if self._timed_out:

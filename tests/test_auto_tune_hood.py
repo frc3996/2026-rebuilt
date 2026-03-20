@@ -14,9 +14,6 @@ def hood():
     h.limits_set = True
     h.min_rotations = 0.0
     h.max_rotations = 4.0
-    h.motor = MagicMock()
-    h.encoder = MagicMock()
-    h.closed_loop = MagicMock()
     return h
 
 
@@ -34,7 +31,7 @@ def cmd(hood):
 
 def test_gain_calculation(cmd, hood):
     """Given known crossing timestamps, verify Z-N PD gains are correct."""
-    hood.encoder.getPosition.return_value = 1.0  # below midpoint (2.0)
+    hood.get_current_position.return_value = 1.0  # below midpoint (2.0)
     cmd.initialize()
 
     # Inject known crossings: half-period of 0.25s
@@ -48,29 +45,28 @@ def test_gain_calculation(cmd, hood):
     expected_p = 0.6 * ku
     expected_d = 0.075 * ku * tu
 
-    hood.closed_loop.setP.assert_called_once()
-    hood.closed_loop.setD.assert_called_once()
-    actual_p = hood.closed_loop.setP.call_args[0][0]
-    actual_d = hood.closed_loop.setD.call_args[0][0]
+    hood.set_pid_gains.assert_called_once()
+    actual_p = hood.set_pid_gains.call_args[0][0]
+    actual_d = hood.set_pid_gains.call_args[0][2]
     assert abs(actual_p - expected_p) < 1e-6
     assert abs(actual_d - expected_d) < 1e-6
 
 
 def test_timeout_no_gains(cmd, hood):
     """Timeout → gains NOT applied."""
-    hood.encoder.getPosition.return_value = 1.0
+    hood.get_current_position.return_value = 1.0
     cmd.initialize()
     cmd._timed_out = True
 
     cmd.end(interrupted=False)
-    hood.closed_loop.setP.assert_not_called()
+    hood.set_pid_gains.assert_not_called()
 
 
 def test_interrupted_no_gains(cmd, hood):
     """Interrupted → gains NOT applied."""
-    hood.encoder.getPosition.return_value = 1.0
+    hood.get_current_position.return_value = 1.0
     cmd.initialize()
     cmd._crossings = [0.5 + i * 0.25 for i in range(REQUIRED_CROSSINGS)]
 
     cmd.end(interrupted=True)
-    hood.closed_loop.setP.assert_not_called()
+    hood.set_pid_gains.assert_not_called()

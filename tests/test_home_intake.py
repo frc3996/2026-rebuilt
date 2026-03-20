@@ -15,8 +15,6 @@ from subsystems.intake import (
 def intake():
     i = MagicMock()
     i.homed = False
-    i.up_down_motor = MagicMock()
-    i.up_down_encoder = MagicMock()
     return i
 
 
@@ -31,13 +29,13 @@ def cmd(intake):
 
 
 def _simulate_stall(intake):
-    intake.up_down_motor.getOutputCurrent.return_value = STALL_CURRENT_THRESHOLD + 1.0
-    intake.up_down_encoder.getVelocity.return_value = STALL_VELOCITY_THRESHOLD / 2.0
+    intake.get_arm_current.return_value = STALL_CURRENT_THRESHOLD + 1.0
+    intake.get_arm_velocity.return_value = STALL_VELOCITY_THRESHOLD / 2.0
 
 
 def _simulate_no_stall(intake):
-    intake.up_down_motor.getOutputCurrent.return_value = 1.0
-    intake.up_down_encoder.getVelocity.return_value = 100.0
+    intake.get_arm_current.return_value = 1.0
+    intake.get_arm_velocity.return_value = 100.0
 
 
 def test_stall_confirmed_after_n_cycles(cmd, intake):
@@ -53,8 +51,7 @@ def test_stall_confirmed_after_n_cycles(cmd, intake):
     assert cmd.isFinished()
 
     cmd.end(interrupted=False)
-    intake.up_down_encoder.setPosition.assert_called_once_with(0.0)
-    assert intake.homed
+    intake.reset_arm_encoder.assert_called_once()
     intake.enable_soft_limits.assert_called_once()
 
 
@@ -90,7 +87,7 @@ def test_timeout_does_not_home(cmd, intake):
     assert cmd.isFinished()
 
     cmd.end(interrupted=False)
-    intake.up_down_encoder.setPosition.assert_not_called()
+    intake.reset_arm_encoder.assert_not_called()
     assert not intake.homed
     intake.enable_soft_limits.assert_not_called()
 
@@ -104,6 +101,6 @@ def test_interrupted_does_not_home(cmd, intake):
         cmd.execute()
 
     cmd.end(interrupted=True)
-    intake.up_down_encoder.setPosition.assert_not_called()
+    intake.reset_arm_encoder.assert_not_called()
     assert not intake.homed
     intake.enable_soft_limits.assert_not_called()
