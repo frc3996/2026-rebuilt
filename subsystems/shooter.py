@@ -2,6 +2,8 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
+from constants import CANIds
+
 
 class ShooterSubSystem(Subsystem):
     """
@@ -10,11 +12,15 @@ class ShooterSubSystem(Subsystem):
     """
 
     def __init__(self):
-        self.motor = rev.SparkMax(40, rev.SparkMax.MotorType.kBrushless)
+        self.motor = rev.SparkMax(
+            CANIds.SHOOTER_LEADER, rev.SparkMax.MotorType.kBrushless
+        )
         self.motor_encoder = self.motor.getEncoder()
         self.motor_closed_loop = self.motor.getClosedLoopController()
 
-        self.follower_motor = rev.SparkMax(41, rev.SparkMax.MotorType.kBrushless)
+        self.follower_motor = rev.SparkMax(
+            CANIds.SHOOTER_FOLLOWER, rev.SparkMax.MotorType.kBrushless
+        )
 
         self.motor_config = rev.SparkBaseConfig()
         self.motor_config.smartCurrentLimit(50)
@@ -38,7 +44,7 @@ class ShooterSubSystem(Subsystem):
         self.follower_config.smartCurrentLimit(50)
         self.follower_config.secondaryCurrentLimit(60)
         self.follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        self.follower_config.follow(40, False)
+        self.follower_config.follow(CANIds.SHOOTER_LEADER, True)
         self.follower_motor.configure(
             self.follower_config,
             rev.ResetMode.kResetSafeParameters,

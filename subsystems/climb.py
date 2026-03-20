@@ -1,6 +1,7 @@
 import ntcore
 import wpilib
 from commands2 import Subsystem
+from constants import PneumaticChannels
 
 
 class ClimbSubsystem(Subsystem):
@@ -10,7 +11,7 @@ class ClimbSubsystem(Subsystem):
 
     def __init__(self):
         self.solenoid = wpilib.Solenoid(
-            moduleType=wpilib.PneumaticsModuleType.CTREPCM, channel=2
+            moduleType=wpilib.PneumaticsModuleType.CTREPCM, channel=PneumaticChannels.CLIMBER_SOLENOID
         )
         self.compressor = wpilib.Compressor(wpilib.PneumaticsModuleType.CTREPCM)
 

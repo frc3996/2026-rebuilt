@@ -1,6 +1,7 @@
 import ntcore
 import rev
 from commands2 import Subsystem
+from constants import CANIds
 
 
 class IndexerSubSystem(Subsystem):
@@ -10,9 +11,10 @@ class IndexerSubSystem(Subsystem):
     """
 
     def __init__(self):
-        self.conveyor_motor = rev.SparkMax(42, rev.SparkMax.MotorType.kBrushed)
+        self.conveyor_motor = rev.SparkMax(CANIds.INDEXER, rev.SparkMax.MotorType.kBrushed)
 
         self.conveyor_config = rev.SparkBaseConfig()
+        self.conveyor_config.inverted(True)
         self.conveyor_config.smartCurrentLimit(30)
         self.conveyor_config.secondaryCurrentLimit(40)
         self.conveyor_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

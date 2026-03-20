@@ -11,7 +11,7 @@ class CANIds:
     # LEFT
     SHOOTER_LEADER = 47  # VALIDATED
     # RIGHT
-    SHOOTER_FOLLOWER = 41  # VALIDATED
+    SHOOTER_FOLLOWER = 43  # VALIDATED
 
     # Indexer — single brushed conveyor motor
     INDEXER = 42  # VALIDATED
@@ -25,7 +25,7 @@ class CANIds:
 
     # Kicker — two motors on shared shaft feeding into shooter
     # RIGHT
-    KICKER_LEADER = 43  # VALIDATED
+    KICKER_LEADER = 41  # VALIDATED
     # LEFT
     KICKER_FOLLOWER = 48  # VALIDATED
 

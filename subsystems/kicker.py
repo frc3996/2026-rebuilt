@@ -1,6 +1,7 @@
 import ntcore
 import rev
 from commands2 import Subsystem
+from constants import CANIds
 
 
 class KickerSubSystem(Subsystem):
@@ -10,11 +11,11 @@ class KickerSubSystem(Subsystem):
     """
 
     def __init__(self):
-        self.motor = rev.SparkMax(50, rev.SparkMax.MotorType.kBrushless)
+        self.motor = rev.SparkMax(CANIds.KICKER_LEADER, rev.SparkMax.MotorType.kBrushless)
         self.motor_encoder = self.motor.getEncoder()
         self.motor_closed_loop = self.motor.getClosedLoopController()
 
-        self.follower_motor = rev.SparkMax(51, rev.SparkMax.MotorType.kBrushless)
+        self.follower_motor = rev.SparkMax(CANIds.KICKER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
 
         self.motor_config = rev.SparkBaseConfig()
         self.motor_config.smartCurrentLimit(50)
@@ -38,7 +39,7 @@ class KickerSubSystem(Subsystem):
         self.follower_config.smartCurrentLimit(50)
         self.follower_config.secondaryCurrentLimit(60)
         self.follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        self.follower_config.follow(50, True)
+        self.follower_config.follow(CANIds.KICKER_LEADER, True)
         self.follower_motor.configure(
             self.follower_config,
             rev.ResetMode.kResetSafeParameters,

@@ -1,9 +1,9 @@
 import math
 from typing import override
 
+import ntcore
 from commands2 import Subsystem
-from phoenix6 import utils
-from wpilib import DataLogManager, SmartDashboard
+from wpilib import DataLogManager
 
 from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
@@ -18,7 +18,14 @@ class VisionSubsystem(Subsystem):
     def __init__(self, swerve: CommandSwerveDrivetrain, camera: str):
         self._swerve: CommandSwerveDrivetrain = swerve
         self._camera: str = camera
-        SmartDashboard.putBoolean("Vision/UseMegaTag2", False)
+        self._use_megatag2 = False
+
+        table = ntcore.NetworkTableInstance.getDefault().getTable("Vision")
+        self._use_mt2_sub = table.getBooleanTopic("UseMegaTag2").subscribe(False)
+        self._use_mt2_pub = table.getBooleanTopic("UseMegaTag2").publish()
+        self._use_mt2_pub.set(False)
+        self._too_far_pub = table.getBooleanTopic("TooFar").publish()
+
         super().__init__()
 
     @override
@@ -33,16 +40,13 @@ class VisionSubsystem(Subsystem):
         try:
             state = self._swerve.get_state_copy()
 
-            # Provide robot orientation for MegaTag2
-            LimelightHelpers.set_robot_orientation(
+            # Provide robot orientation for MegaTag2 — no_flush avoids blocking NT round-trip
+            LimelightHelpers.set_robot_orientation_no_flush(
                 self._camera, state.pose.rotation().degrees(), 0, 0, 0, 0, 0
             )
 
-            # MT1
-            estimate = None
-            use_mt2 = SmartDashboard.getBoolean("Vision/UseMegaTag2", True)
+            use_mt2 = self._use_mt2_sub.get()
             if use_mt2:
-                # MT2
                 estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
                     self._camera
                 )
@@ -53,12 +57,11 @@ class VisionSubsystem(Subsystem):
             if estimate is None or estimate.tag_count == 0:
                 return
 
-            # Optional distance sanity check
             if estimate.avg_tag_dist > 4.125:
-                SmartDashboard.putBoolean("Vision/TooFar", True)
+                self._too_far_pub.set(True)
                 return
 
-            SmartDashboard.putBoolean("Vision/TooFar", False)
+            self._too_far_pub.set(False)
 
             if not use_mt2:
                 self._swerve.seed_field_centric(estimate.pose.rotation())
