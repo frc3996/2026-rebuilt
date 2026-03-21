@@ -7,45 +7,42 @@ from constants import NEO_FREE_SPEED_RPM, CANIds
 
 class KickerSubSystem(Subsystem):
     """
-    Kicker Subsystem — two motors on a shared shaft feeding balls into the shooter.
-    Motor 48 follows motor 41.
+    Kicker Subsystem — two independent flywheels feeding balls into the shooter.
+    Each motor has its own velocity PID loop running at the same target RPM.
     """
 
     def __init__(self):
         super().__init__()
-        self._motor = rev.SparkMax(CANIds.KICKER_LEADER, rev.SparkMax.MotorType.kBrushless)
-        self._encoder = self._motor.getEncoder()
-        self._closed_loop = self._motor.getClosedLoopController()
+        self._right_motor = rev.SparkMax(CANIds.KICKER_LEADER, rev.SparkMax.MotorType.kBrushless)
+        self._right_encoder = self._right_motor.getEncoder()
+        self._right_closed_loop = self._right_motor.getClosedLoopController()
 
-        self._follower = rev.SparkMax(CANIds.KICKER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
+        self._left_motor = rev.SparkMax(CANIds.KICKER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
+        self._left_encoder = self._left_motor.getEncoder()
+        self._left_closed_loop = self._left_motor.getClosedLoopController()
 
-        leader_config = rev.SparkBaseConfig()
-        leader_config.voltageCompensation(12.0)
-        leader_config.smartCurrentLimit(50)
-        leader_config.secondaryCurrentLimit(60)
-        leader_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        leader_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
-        leader_config.closedLoop.P(0.0001, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
-        self._motor.configure(
-            leader_config,
+        motor_config = rev.SparkBaseConfig()
+        motor_config.voltageCompensation(12.0)
+        motor_config.smartCurrentLimit(50)
+        motor_config.secondaryCurrentLimit(60)
+        motor_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
+        motor_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
+        motor_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
+        motor_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
+        motor_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
+        motor_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
+        motor_config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
+
+        self._right_motor.configure(
+            motor_config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
 
-        follower_config = rev.SparkBaseConfig()
-        follower_config.voltageCompensation(12.0)
-        follower_config.smartCurrentLimit(50)
-        follower_config.secondaryCurrentLimit(60)
-        follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        follower_config.follow(CANIds.KICKER_LEADER, True)
-        follower_config.signals.primaryEncoderPositionPeriodMs(500)
-        follower_config.signals.primaryEncoderVelocityPeriodMs(500)
-        self._follower.configure(
-            follower_config,
+        # Invert left so both spin inward
+        motor_config.inverted(True)
+        self._left_motor.configure(
+            motor_config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
@@ -53,17 +50,23 @@ class KickerSubSystem(Subsystem):
         self._target_speed = 0.0
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Kicker")
-        self._velocity_pub = table.getDoubleTopic("Velocity RPM").publish()
+        self._right_velocity_pub = table.getDoubleTopic("Right Velocity RPM").publish()
+        self._left_velocity_pub = table.getDoubleTopic("Left Velocity RPM").publish()
         self._target_pub = table.getDoubleTopic("Target RPM").publish()
-        self._amps_pub = table.getDoubleTopic("Amps").publish()
-        self._temp_pub = table.getDoubleTopic("Temperature C").publish()
+        self._right_amps_pub = table.getDoubleTopic("Right Amps").publish()
+        self._left_amps_pub = table.getDoubleTopic("Left Amps").publish()
 
     def get_current_speed(self):
-        return self._encoder.getVelocity()
+        return max(self._right_encoder.getVelocity(), self._left_encoder.getVelocity())
 
     def set_target_speed(self, target_velocity):
         self._target_speed = target_velocity
-        self._closed_loop.setReference(
+        self._right_closed_loop.setReference(
+            target_velocity,
+            rev.SparkBase.ControlType.kVelocity,
+            rev.ClosedLoopSlot.kSlot0,
+        )
+        self._left_closed_loop.setReference(
             target_velocity,
             rev.SparkBase.ControlType.kVelocity,
             rev.ClosedLoopSlot.kSlot0,
@@ -71,13 +74,15 @@ class KickerSubSystem(Subsystem):
 
     def stop(self):
         self._target_speed = 0.0
-        self._motor.stopMotor()
+        self._right_motor.stopMotor()
+        self._left_motor.stopMotor()
 
     def periodic(self):
-        self._velocity_pub.set(self._encoder.getVelocity())
+        self._right_velocity_pub.set(self._right_encoder.getVelocity())
+        self._left_velocity_pub.set(self._left_encoder.getVelocity())
         self._target_pub.set(self._target_speed)
-        self._amps_pub.set(self._motor.getOutputCurrent())
-        self._temp_pub.set(self._motor.getMotorTemperature())
+        self._right_amps_pub.set(self._right_motor.getOutputCurrent())
+        self._left_amps_pub.set(self._left_motor.getOutputCurrent())
 
     def simulationPeriodic(self):
         pass

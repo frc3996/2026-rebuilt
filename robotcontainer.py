@@ -22,14 +22,14 @@ from commands.auto_tune_intake import AutoTuneIntakeCommand
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
 from commands.shoot_at_hub import ShootAtHub
-from constants import LIMELIGHT_CAMERA_NAME
+from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
 from subsystems.intake import IntakeSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
-from subsystems.vision import VisionSubsystem
+from subsystems.vision import LIMELIGHT_CAMERA_NAME, VisionSubsystem
 from telemetry import Telemetry
 
 
@@ -107,6 +107,7 @@ class RobotContainer:
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings — uncomment ONE group at a time:
         self.configureHardwareTestBindings()
+        # self.configureShotTuningBindings()
         # self.configureTuningTestBindings()
         # self.configureSwerveButtonBindings()
         # self.configureCompetitionBindings()
@@ -225,8 +226,8 @@ class RobotContainer:
         roller_rpm_sub = table.getDoubleTopic("Roller RPM").subscribe(1000.0)
         table.getDoubleTopic("Roller RPM").publish().set(1000.0)
 
-        arm_amps_sub = table.getDoubleTopic("Arm Amps").subscribe(5.0)
-        table.getDoubleTopic("Arm Amps").publish().set(5.0)
+        arm_output_sub = table.getDoubleTopic("Arm Output").subscribe(0.15)
+        table.getDoubleTopic("Arm Output").publish().set(0.15)
 
         hood_output_sub = table.getDoubleTopic("Hood Output").subscribe(0.15)
         table.getDoubleTopic("Hood Output").publish().set(0.15)
@@ -275,11 +276,11 @@ class RobotContainer:
             )
         )
 
-        # LT: Hold to run intake arm at NT-tunable current (amps)
+        # LT: Hold to run intake arm at NT-tunable duty cycle
         self._joystick_1.leftTrigger().whileTrue(
             cmd.runEnd(
-                lambda: self.intake.set_arm_target_amp(arm_amps_sub.get()),
-                lambda: self.intake.set_arm_target_amp(0),
+                lambda: self.intake.set_arm_duty_cycle(arm_output_sub.get()),
+                lambda: self.intake.set_arm_duty_cycle(0),
                 self.intake,
             )
         )
@@ -329,6 +330,74 @@ class RobotContainer:
         self.hood.setDefaultCommand(self.hood.run(lambda: self.hood.set_target_position(hood_pos_sub.get())))
 
         self.intake.setDefaultCommand(self.intake.run(lambda: self.intake.set_arm_target_position(arm_pos_sub.get())))
+
+    def configureShotTuningBindings(self):
+        """
+        Shot calibration bindings — drive to distances and tune hood/RPM.
+
+        Button layout:
+          Left stick   = Translation (field-centric)
+          Right stick X = Rotation
+          RT (hold)    = Fire at NT-tunable RPM + hood position (staged feed)
+          LB           = Record data point (distance, hood_turns, RPM)
+          LT (hold)    = Deploy intake + spin rollers (load balls)
+          Start        = Home hood
+          Back         = Home intake arm
+
+        Tune values in AdvantageScope under ShotTuning/ table:
+          Distance     = measured distance to target (meters)
+          Hood Position = hood motor turns
+          Shooter RPM  = flywheel target RPM
+        """
+        # Swerve drive
+        self.drivetrain.setDefaultCommand(
+            self.drivetrain.apply_request(
+                lambda: (
+                    self._drive.with_velocity_x(
+                        joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                    )
+                    .with_velocity_y(
+                        joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                    )
+                    .with_rotational_rate(
+                        joystick_filter(-self._joystick_1.getRightX()) * self._max_angular_rate
+                    )
+                )
+            )
+        )
+
+        idle = swerve.requests.Idle()
+        Trigger(DriverStation.isDisabled).whileTrue(self.drivetrain.apply_request(lambda: idle).ignoringDisable(True))
+
+        self.drivetrain.register_telemetry(lambda state: self._logger.telemeterize(state))
+
+        # RT: Hold to fire at NT-tunable values
+        self._tune_shot = TuneShot(self.shooter, self.kicker, self.indexer, self.hood)
+        self._joystick_1.rightTrigger().whileTrue(self._tune_shot)
+
+        # LB: Record current values as a calibration data point
+        self._joystick_1.leftBumper().onTrue(cmd.runOnce(self._tune_shot.record_entry))
+
+        # LT: Hold to deploy intake + spin rollers (load balls)
+        self._joystick_1.leftTrigger().whileTrue(
+            cmd.runEnd(
+                lambda: (
+                    self.intake.deploy(),
+                    self.intake.set_roller_target_speed(3000),
+                ),
+                lambda: self.intake.set_roller_target_speed(0),
+                self.intake,
+            )
+        )
+
+        # Start: Home hood
+        self._joystick_1.start().onTrue(HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS))
+
+        # Back: Home intake arm
+        self._joystick_1.back().onTrue(HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS))
+
+        # Reset field-centric heading
+        self._joystick_1.a().onTrue(self.drivetrain.runOnce(self.drivetrain.seed_field_centric))
 
     def configureTuningTestBindings(self):
         """
@@ -478,7 +547,7 @@ class RobotContainer:
         """
         import math
 
-        from constants import HUB_POSITION
+        from commands.shoot_at_hub import HUB_POSITION
 
         robot_pose = self.drivetrain.get_state().pose
         robot_translation = robot_pose.translation()

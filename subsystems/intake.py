@@ -1,5 +1,3 @@
-import math
-
 import ntcore
 import rev
 from commands2 import Subsystem
@@ -7,7 +5,7 @@ from commands2 import Subsystem
 from constants import NEO_FREE_SPEED_RPM, CANIds
 
 # Homing constants
-HOMING_VOLTAGE = 0.75  # Volts toward deployed hard stop (positive)  # TUNE
+HOMING_DUTYCYCLE = 0.75  # Duty cycle toward deployed hard stop (positive)  # TUNE
 STALL_CURRENT_THRESHOLD = 8.0  # Amps  # TUNE
 STALL_VELOCITY_THRESHOLD = 20.0  # RPM  # TUNE
 STALL_CONFIRM_CYCLES = 5  # Consecutive loops (~100ms at 20ms loop)
@@ -22,22 +20,11 @@ POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 DEPLOY_POSITION = 0.0  # Encoder zero at deployed hard stop (home position)
 STOW_POSITION = -3.0  # Retracted/stowed position in motor turns  # TUNE
 
-# Angle constants
-MIN_ANGLE_DEG = 0.0  # Degrees at min rotations (fully retracted)  # TUNE
-MAX_ANGLE_DEG = 90.0  # Degrees at max rotations (fully deployed)  # TUNE
-
-# Gravity feedforward
-KG = 0.03  # Duty-cycle feedforward at horizontal  # TUNE
-
 # PID defaults (slot 0 — position)
-ARM_KP = 0.1  # TUNE
+ARM_KP = 0.15  # TUNE
 ARM_KI = 0.0
-ARM_KD = 0.01  # TUNE
+ARM_KD = 0.005  # TUNE
 
-# PID defaults (slot 1 — current control)
-ARM_CURRENT_KP = 0.04  # TUNE
-ARM_CURRENT_KI = 0.0
-ARM_CURRENT_KD = 0.0
 
 
 class IntakeSubSystem(Subsystem):
@@ -77,9 +64,6 @@ class IntakeSubSystem(Subsystem):
         self._arm_config.closedLoop.I(ARM_KI, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.D(ARM_KD, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.outputRange(-1, 1, rev.ClosedLoopSlot.kSlot0)
-        self._arm_config.closedLoop.P(ARM_CURRENT_KP, rev.ClosedLoopSlot.kSlot1)
-        self._arm_config.closedLoop.I(ARM_CURRENT_KI, rev.ClosedLoopSlot.kSlot1)
-        self._arm_config.closedLoop.D(ARM_CURRENT_KD, rev.ClosedLoopSlot.kSlot1)
         self._arm_config.softLimit.forwardSoftLimit(self.max_rotations)
         self._arm_config.softLimit.forwardSoftLimitEnabled(True)
         self._arm_config.softLimit.reverseSoftLimit(self.min_rotations)
@@ -97,7 +81,7 @@ class IntakeSubSystem(Subsystem):
         roller_config.secondaryCurrentLimit(60)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         roller_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
-        roller_config.closedLoop.P(0.0001, rev.ClosedLoopSlot.kSlot0)
+        roller_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
@@ -111,7 +95,7 @@ class IntakeSubSystem(Subsystem):
         self._arm_target: float = 0.0
         self._roller_target: float = 0.0
         self._arm_position_active: bool = False
-        self._stall_counter: int = 0
+        self._stall_cycle: int = 0
         self._stall_count: int = 0
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Intake")
@@ -120,6 +104,7 @@ class IntakeSubSystem(Subsystem):
         self._arm_target_pub = table.getDoubleTopic("Arm Target Turns").publish()
         self._arm_velocity_pub = table.getDoubleTopic("Arm Velocity RPM").publish()
         self._arm_homed_pub = table.getBooleanTopic("Arm Homed").publish()
+        self._arm_stall_cycle_pub = table.getIntegerTopic("Arm Stall Cycle").publish()
         self._arm_stall_count_pub = table.getIntegerTopic("Arm Stall Count").publish()
         self._arm_limits_set_pub = table.getBooleanTopic("Arm Limits Set").publish()
         self._roller_velocity_pub = table.getDoubleTopic("Roller Velocity RPM").publish()
@@ -127,9 +112,6 @@ class IntakeSubSystem(Subsystem):
         self._roller_amps_pub = table.getDoubleTopic("Roller Amps").publish()
 
     # ── Low-level arm motor access (for homing / auto-tune commands) ──
-
-    def set_arm_voltage(self, volts: float) -> None:
-        self._arm_motor.setVoltage(volts)
 
     def set_arm_duty_cycle(self, output: float) -> None:
         self._arm_motor.set(output)
@@ -159,10 +141,6 @@ class IntakeSubSystem(Subsystem):
 
     # ── Arm control ────────────────────────────────────────────────
 
-    def set_arm_target_amp(self, target_amp: float) -> None:
-        """Drive arm with current control (slot 1)."""
-        self._arm_closed_loop.setReference(target_amp, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1)
-
     def set_arm_target_position(self, target_position: float) -> None:
         """Drive arm to a position in motor turns (requires homing)."""
         if not self.homed:
@@ -174,42 +152,6 @@ class IntakeSubSystem(Subsystem):
             target_position,
             rev.SparkBase.ControlType.kPosition,
             rev.ClosedLoopSlot.kSlot0,
-        )
-
-    def set_angle(self, degrees: float) -> None:
-        """Drive arm to an angle in degrees with gravity feedforward.
-
-        Requires homing and limits to be set. Clamps to
-        [MIN_ANGLE_DEG, MAX_ANGLE_DEG] and linearly maps to rotations.
-        """
-        if not self.homed or not self.limits_set:
-            return
-
-        degrees = max(MIN_ANGLE_DEG, min(degrees, MAX_ANGLE_DEG))
-
-        # Linear interpolation: degrees → rotations
-        if MAX_ANGLE_DEG == MIN_ANGLE_DEG:
-            target_rot = self.min_rotations
-        else:
-            t = (degrees - MIN_ANGLE_DEG) / (MAX_ANGLE_DEG - MIN_ANGLE_DEG)
-            target_rot = self.min_rotations + t * (self.max_rotations - self.min_rotations)
-
-        # Gravity feedforward from current angle
-        current_rot = self._arm_encoder.getPosition()
-        if self.max_rotations == self.min_rotations:
-            current_angle_deg = MIN_ANGLE_DEG
-        else:
-            t_cur = (current_rot - self.min_rotations) / (self.max_rotations - self.min_rotations)
-            current_angle_deg = MIN_ANGLE_DEG + t_cur * (MAX_ANGLE_DEG - MIN_ANGLE_DEG)
-        ff = KG * math.cos(math.radians(current_angle_deg))
-
-        self._arm_target = target_rot
-        self._arm_position_active = True
-        self._arm_closed_loop.setReference(
-            target_rot,
-            rev.SparkBase.ControlType.kPosition,
-            rev.ClosedLoopSlot.kSlot0,
-            ff,
         )
 
     def deploy(self) -> None:
@@ -275,18 +217,7 @@ class IntakeSubSystem(Subsystem):
             self._arm_motor.stopMotor()
         self.set_roller_target_speed(0)
 
-    def stop(self) -> None:
-        """Stop both arm and roller motors."""
-        self._arm_target = 0.0
-        self._roller_target = 0.0
-        self._arm_position_active = False
-        self._arm_motor.stopMotor()
-        self._roller_motor.stopMotor()
-
     # ── Roller control ─────────────────────────────────────────────
-
-    def get_roller_current_speed(self) -> float:
-        return self._roller_encoder.getVelocity()
 
     def set_roller_target_speed(self, target_velocity: float) -> None:
         self._roller_target = target_velocity
@@ -305,12 +236,12 @@ class IntakeSubSystem(Subsystem):
         # Stall detection during position control
         if self._arm_position_active:
             if arm_current > POSITION_STALL_CURRENT and arm_velocity < POSITION_STALL_VELOCITY:
-                self._stall_counter += 1
+                self._stall_cycle += 1
             else:
-                self._stall_counter = 0
-            if self._stall_counter >= POSITION_STALL_CYCLES:
+                self._stall_cycle = 0
+            if self._stall_cycle >= POSITION_STALL_CYCLES:
                 self._stall_count += 1
-                self._stall_counter = 0
+                self._stall_cycle = 0
                 self._arm_position_active = False
                 self._arm_motor.stopMotor()
 
@@ -319,6 +250,7 @@ class IntakeSubSystem(Subsystem):
         self._arm_target_pub.set(self._arm_target)
         self._arm_velocity_pub.set(self._arm_encoder.getVelocity())
         self._arm_homed_pub.set(self.homed)
+        self._arm_stall_cycle_pub.set(self._stall_cycle)
         self._arm_stall_count_pub.set(self._stall_count)
         self._arm_limits_set_pub.set(self.limits_set)
         self._roller_velocity_pub.set(self._roller_encoder.getVelocity())

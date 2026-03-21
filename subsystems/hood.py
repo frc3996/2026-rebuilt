@@ -1,5 +1,3 @@
-import math
-
 import ntcore
 import rev
 from commands2 import Subsystem
@@ -7,7 +5,7 @@ from commands2 import Subsystem
 from constants import CANIds
 
 # Homing constants
-HOMING_VOLTAGE = -0.75  # Volts toward hard stop  # TUNE
+HOMING_DUTYCYCLE = -0.75  # Duty cycle toward hard stop  # TUNE
 STALL_CURRENT_THRESHOLD = 8.0  # Amps  # TUNE
 STALL_VELOCITY_THRESHOLD = 20.0  # RPM  # TUNE
 STALL_CONFIRM_CYCLES = 5  # Consecutive loops (~100ms at 20ms loop)
@@ -18,23 +16,13 @@ POSITION_STALL_CURRENT = 10.0  # Amps — lower than homing, catches sustained l
 POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
-# Position / angle constants
+# Position constants
 STOW_POSITION = 0.0  # Motor turns at home position
-MIN_ANGLE_DEG = 0.0  # Degrees at min rotations  # TUNE
-MAX_ANGLE_DEG = 45.0  # Degrees at max rotations  # TUNE
-
-# Gravity feedforward
-KG = 0.03  # Duty-cycle feedforward at horizontal  # TUNE
 
 # PID defaults (slot 0 — position)
 KP = 0.1  # TUNE
 KI = 0.0
-KD = 0.01  # TUNE
-
-# PID defaults (slot 1 — current control)
-CURRENT_KP = 0.04  # TUNE
-CURRENT_KI = 0.0
-CURRENT_KD = 0.0
+KD = 0.002  # TUNE
 
 
 class HoodSubSystem(Subsystem):
@@ -56,7 +44,7 @@ class HoodSubSystem(Subsystem):
 
         # Rotation limits — set via set_min_limit / set_max_limit
         self.min_rotations: float = 0.0
-        self.max_rotations: float = 5.0  # default until calibrated  # TUNE
+        self.max_rotations: float = 100.0  # default until calibrated  # TUNE
 
         self._config = rev.SparkBaseConfig()
         self._config.voltageCompensation(12.0)
@@ -68,9 +56,6 @@ class HoodSubSystem(Subsystem):
         self._config.closedLoop.I(KI, rev.ClosedLoopSlot.kSlot0)
         self._config.closedLoop.D(KD, rev.ClosedLoopSlot.kSlot0)
         self._config.closedLoop.outputRange(-1, 1, rev.ClosedLoopSlot.kSlot0)
-        self._config.closedLoop.P(CURRENT_KP, rev.ClosedLoopSlot.kSlot1)
-        self._config.closedLoop.I(CURRENT_KI, rev.ClosedLoopSlot.kSlot1)
-        self._config.closedLoop.D(CURRENT_KD, rev.ClosedLoopSlot.kSlot1)
         self._config.softLimit.forwardSoftLimit(self.max_rotations)
         self._config.softLimit.forwardSoftLimitEnabled(True)
         self._config.softLimit.reverseSoftLimit(self.min_rotations)
@@ -83,7 +68,7 @@ class HoodSubSystem(Subsystem):
 
         self._target_position: float = 0.0
         self._position_active: bool = False
-        self._stall_counter: int = 0
+        self._stall_cycle: int = 0
         self._stall_count: int = 0
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Hood")
@@ -92,13 +77,11 @@ class HoodSubSystem(Subsystem):
         self._velocity_pub = table.getDoubleTopic("Velocity RPM").publish()
         self._amps_pub = table.getDoubleTopic("Amps").publish()
         self._homed_pub = table.getBooleanTopic("Homed").publish()
+        self._stall_cycle_pub = table.getIntegerTopic("Stall Cycle").publish()
         self._stall_count_pub = table.getIntegerTopic("Stall Count").publish()
         self._limits_set_pub = table.getBooleanTopic("Limits Set").publish()
 
     # ── Low-level motor access (for homing / auto-tune commands) ──
-
-    def set_voltage(self, volts: float) -> None:
-        self._motor.setVoltage(volts)
 
     def set_duty_cycle(self, output: float) -> None:
         self._motor.set(output)
@@ -132,46 +115,6 @@ class HoodSubSystem(Subsystem):
             rev.SparkBase.ControlType.kPosition,
             rev.ClosedLoopSlot.kSlot0,
         )
-
-    def set_angle(self, degrees: float) -> None:
-        """Drive hood to an angle in degrees with gravity feedforward.
-
-        Requires homing and limits to be set. Clamps to
-        [MIN_ANGLE_DEG, MAX_ANGLE_DEG] and linearly maps to rotations.
-        """
-        if not self.is_homed or not self.limits_set:
-            return
-
-        degrees = max(MIN_ANGLE_DEG, min(degrees, MAX_ANGLE_DEG))
-
-        # Linear interpolation: degrees → rotations
-        if MAX_ANGLE_DEG == MIN_ANGLE_DEG:
-            target_rot = self.min_rotations
-        else:
-            t = (degrees - MIN_ANGLE_DEG) / (MAX_ANGLE_DEG - MIN_ANGLE_DEG)
-            target_rot = self.min_rotations + t * (self.max_rotations - self.min_rotations)
-
-        # Gravity feedforward from current angle
-        current_rot = self._encoder.getPosition()
-        if self.max_rotations == self.min_rotations:
-            current_angle_deg = MIN_ANGLE_DEG
-        else:
-            t_cur = (current_rot - self.min_rotations) / (self.max_rotations - self.min_rotations)
-            current_angle_deg = MIN_ANGLE_DEG + t_cur * (MAX_ANGLE_DEG - MIN_ANGLE_DEG)
-        ff = KG * math.cos(math.radians(current_angle_deg))
-
-        self._target_position = target_rot
-        self._position_active = True
-        self._closed_loop.setReference(
-            target_rot,
-            rev.SparkBase.ControlType.kPosition,
-            rev.ClosedLoopSlot.kSlot0,
-            ff,
-        )
-
-    def set_target_amps(self, target_amps: float) -> None:
-        """Drive hood with current control (slot 1)."""
-        self._closed_loop.setReference(target_amps, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1)
 
     # ── Homing helpers ─────────────────────────────────────────────
 
@@ -241,12 +184,12 @@ class HoodSubSystem(Subsystem):
         # Stall detection during position control
         if self._position_active:
             if current > POSITION_STALL_CURRENT and velocity < POSITION_STALL_VELOCITY:
-                self._stall_counter += 1
+                self._stall_cycle += 1
             else:
-                self._stall_counter = 0
-            if self._stall_counter >= POSITION_STALL_CYCLES:
+                self._stall_cycle = 0
+            if self._stall_cycle >= POSITION_STALL_CYCLES:
                 self._stall_count += 1
-                self._stall_counter = 0
+                self._stall_cycle = 0
                 self._position_active = False
                 self._motor.stopMotor()
 
@@ -255,6 +198,7 @@ class HoodSubSystem(Subsystem):
         self._velocity_pub.set(self._encoder.getVelocity())
         self._amps_pub.set(current)
         self._homed_pub.set(self.is_homed)
+        self._stall_cycle_pub.set(self._stall_cycle)
         self._stall_count_pub.set(self._stall_count)
         self._limits_set_pub.set(self.limits_set)
 

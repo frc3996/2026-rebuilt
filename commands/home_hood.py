@@ -2,8 +2,8 @@ import commands2
 from wpilib import Timer
 
 from subsystems.hood import (
+    HOMING_DUTYCYCLE,
     HOMING_TIMEOUT_SECONDS,
-    HOMING_VOLTAGE,
     STALL_CONFIRM_CYCLES,
     STALL_CURRENT_THRESHOLD,
     STALL_VELOCITY_THRESHOLD,
@@ -31,7 +31,7 @@ class HomeHood(commands2.Command):
         self._timed_out = False
         self._timer.restart()
         self.hood.disable_soft_limits()
-        self.hood.set_voltage(HOMING_VOLTAGE)
+        self.hood.set_duty_cycle(HOMING_DUTYCYCLE)
 
     def execute(self) -> None:
         current = self.hood.get_output_current()

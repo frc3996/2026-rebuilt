@@ -5,9 +5,12 @@ import ntcore
 from commands2 import Subsystem
 from wpilib import DataLogManager
 
-from constants import VISION_MAX_ANGULAR_VELOCITY, VISION_MAX_TAG_DISTANCE
 from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
+
+LIMELIGHT_CAMERA_NAME = "limelight-back"
+VISION_MAX_TAG_DISTANCE = 4.125  # meters — reject estimates beyond this
+VISION_MAX_ANGULAR_VELOCITY = 720  # deg/s — reject estimates during fast rotation
 
 
 class VisionSubsystem(Subsystem):

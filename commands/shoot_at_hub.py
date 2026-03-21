@@ -2,8 +2,9 @@ from typing import ClassVar
 
 import ntcore
 from commands2 import Command
+from wpimath.geometry import Translation2d
 
-from constants import HUB_POSITION
+HUB_POSITION = Translation2d(8.23, 4.115)  # meters (center of field)
 
 
 class ShootAtHub(Command):

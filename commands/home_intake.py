@@ -2,8 +2,8 @@ import commands2
 from wpilib import Timer
 
 from subsystems.intake import (
+    HOMING_DUTYCYCLE,
     HOMING_TIMEOUT_SECONDS,
-    HOMING_VOLTAGE,
     STALL_CONFIRM_CYCLES,
     STALL_CURRENT_THRESHOLD,
     STALL_VELOCITY_THRESHOLD,
@@ -31,7 +31,7 @@ class HomeIntake(commands2.Command):
         self._timed_out = False
         self._timer.restart()
         self.intake.disable_soft_limits()
-        self.intake.set_arm_voltage(HOMING_VOLTAGE)
+        self.intake.set_arm_duty_cycle(HOMING_DUTYCYCLE)
 
     def execute(self) -> None:
         current = self.intake.get_arm_current()
