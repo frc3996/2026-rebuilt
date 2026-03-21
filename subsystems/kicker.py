@@ -1,7 +1,8 @@
 import ntcore
 import rev
 from commands2 import Subsystem
-from constants import CANIds, NEO_FREE_SPEED_RPM
+
+from constants import NEO_FREE_SPEED_RPM, CANIds
 
 
 class KickerSubSystem(Subsystem):
@@ -23,9 +24,7 @@ class KickerSubSystem(Subsystem):
         leader_config.smartCurrentLimit(50)
         leader_config.secondaryCurrentLimit(60)
         leader_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        leader_config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
-        )
+        leader_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         leader_config.closedLoop.P(0.0001, rev.ClosedLoopSlot.kSlot0)
         leader_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
         leader_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)

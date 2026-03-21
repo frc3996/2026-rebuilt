@@ -23,9 +23,15 @@ class Telemetry:
         self._drive_state_table = self._inst.getTable("DriveState")
         self._drive_pose = self._drive_state_table.getStructTopic("Pose", Pose2d).publish()
         self._drive_speeds = self._drive_state_table.getStructTopic("Speeds", ChassisSpeeds).publish()
-        self._drive_module_states = self._drive_state_table.getStructArrayTopic("ModuleStates", SwerveModuleState).publish()
-        self._drive_module_targets = self._drive_state_table.getStructArrayTopic("ModuleTargets", SwerveModuleState).publish()
-        self._drive_module_positions = self._drive_state_table.getStructArrayTopic("ModulePositions", SwerveModulePosition).publish()
+        self._drive_module_states = self._drive_state_table.getStructArrayTopic(
+            "ModuleStates", SwerveModuleState
+        ).publish()
+        self._drive_module_targets = self._drive_state_table.getStructArrayTopic(
+            "ModuleTargets", SwerveModuleState
+        ).publish()
+        self._drive_module_positions = self._drive_state_table.getStructArrayTopic(
+            "ModulePositions", SwerveModulePosition
+        ).publish()
         self._drive_timestamp = self._drive_state_table.getDoubleTopic("Timestamp").publish()
         self._drive_odometry_frequency = self._drive_state_table.getDoubleTopic("OdometryFrequency").publish()
 
@@ -43,18 +49,10 @@ class Telemetry:
         ]
         # A direction and length changing ligament for speed representation
         self._module_speeds: list[MechanismLigament2d] = [
-            self._module_mechanisms[0]
-            .getRoot("RootSpeed", 0.5, 0.5)
-            .appendLigament("Speed", 0.5, 0),
-            self._module_mechanisms[1]
-            .getRoot("RootSpeed", 0.5, 0.5)
-            .appendLigament("Speed", 0.5, 0),
-            self._module_mechanisms[2]
-            .getRoot("RootSpeed", 0.5, 0.5)
-            .appendLigament("Speed", 0.5, 0),
-            self._module_mechanisms[3]
-            .getRoot("RootSpeed", 0.5, 0.5)
-            .appendLigament("Speed", 0.5, 0),
+            self._module_mechanisms[0].getRoot("RootSpeed", 0.5, 0.5).appendLigament("Speed", 0.5, 0),
+            self._module_mechanisms[1].getRoot("RootSpeed", 0.5, 0.5).appendLigament("Speed", 0.5, 0),
+            self._module_mechanisms[2].getRoot("RootSpeed", 0.5, 0.5).appendLigament("Speed", 0.5, 0),
+            self._module_mechanisms[3].getRoot("RootSpeed", 0.5, 0.5).appendLigament("Speed", 0.5, 0),
         ]
         # A direction changing and length constant ligament for module direction
         self._module_directions: list[MechanismLigament2d] = [
@@ -92,24 +90,16 @@ class Telemetry:
         # Also write to log file
         SignalLogger.write_struct("DriveState/Pose", Pose2d, state.pose)
         SignalLogger.write_struct("DriveState/Speeds", ChassisSpeeds, state.speeds)
-        SignalLogger.write_struct_array(
-            "DriveState/ModuleStates", SwerveModuleState, state.module_states
-        )
-        SignalLogger.write_struct_array(
-            "DriveState/ModuleTargets", SwerveModuleState, state.module_targets
-        )
-        SignalLogger.write_struct_array(
-            "DriveState/ModulePositions", SwerveModulePosition, state.module_positions
-        )
-        SignalLogger.write_double(
-            "DriveState/OdometryPeriod", state.odometry_period, "seconds"
-        )
+        SignalLogger.write_struct_array("DriveState/ModuleStates", SwerveModuleState, state.module_states)
+        SignalLogger.write_struct_array("DriveState/ModuleTargets", SwerveModuleState, state.module_targets)
+        SignalLogger.write_struct_array("DriveState/ModulePositions", SwerveModulePosition, state.module_positions)
+        SignalLogger.write_double("DriveState/OdometryPeriod", state.odometry_period, "seconds")
 
         # Telemeterize the pose to a Field2d
         self._field_type_pub.set("Field2d")
 
-        pose_array = [state.pose.x, state.pose.y, state.pose.rotation().degrees()]
-        self._field_pub.set(pose_array)
+        pose_array: list[float] = [state.pose.x, state.pose.y, state.pose.rotation().degrees()]
+        self._field_pub.set(pose_array)  # type: ignore[arg-type]
 
         # Telemeterize each module state to a Mechanism2d
         for i, module_state in enumerate(state.module_states):

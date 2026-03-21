@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 from wpilib import Timer
 
-from commands.auto_tune_hood import AutoTuneHoodCommand, RELAY_OUTPUT, REQUIRED_CROSSINGS
+from commands.auto_tune_hood import RELAY_OUTPUT, REQUIRED_CROSSINGS, AutoTuneHoodCommand
 
 
 @pytest.fixture

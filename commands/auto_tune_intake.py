@@ -2,8 +2,8 @@ import math
 
 import commands2
 from wpilib import Timer
-from subsystems.intake import IntakeSubSystem
 
+from subsystems.intake import IntakeSubSystem
 
 # Auto-tune constants
 RELAY_OUTPUT = 0.12  # Duty cycle for bang-bang oscillation  # TUNE
@@ -69,10 +69,7 @@ class AutoTuneIntakeCommand(commands2.Command):
         if len(self._crossings) < 2:
             return
 
-        periods = [
-            self._crossings[i + 1] - self._crossings[i]
-            for i in range(len(self._crossings) - 1)
-        ]
+        periods = [self._crossings[i + 1] - self._crossings[i] for i in range(len(self._crossings) - 1)]
         half_period = sum(periods) / len(periods)
         tu = half_period * 2.0
 

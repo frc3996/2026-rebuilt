@@ -2,8 +2,8 @@ import math
 
 import commands2
 from wpilib import Timer
-from subsystems.hood import HoodSubSystem
 
+from subsystems.hood import HoodSubSystem
 
 # Auto-tune constants
 RELAY_OUTPUT = 0.12  # Duty cycle for bang-bang oscillation  # TUNE
@@ -73,10 +73,7 @@ class AutoTuneHoodCommand(commands2.Command):
             return
 
         # Compute average period from crossing timestamps
-        periods = [
-            self._crossings[i + 1] - self._crossings[i]
-            for i in range(len(self._crossings) - 1)
-        ]
+        periods = [self._crossings[i + 1] - self._crossings[i] for i in range(len(self._crossings) - 1)]
         half_period = sum(periods) / len(periods)
         tu = half_period * 2.0  # Full period = 2 half-periods
 

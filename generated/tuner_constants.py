@@ -24,20 +24,11 @@ class TunerConstants:
         .with_k_s(0.1)
         .with_k_v(2.66)
         .with_k_a(0)
-        .with_static_feedforward_sign(
-            signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN
-        )
+        .with_static_feedforward_sign(signals.StaticFeedforwardSignValue.USE_CLOSED_LOOP_SIGN)
     )
     # When using closed-loop control, the drive motor uses the control
     # output type specified by SwerveModuleConstants.DriveMotorClosedLoopOutput
-    _drive_gains = (
-        configs.Slot0Configs()
-        .with_k_p(0.1)
-        .with_k_i(0)
-        .with_k_d(0)
-        .with_k_s(0)
-        .with_k_v(0.124)
-    )
+    _drive_gains = configs.Slot0Configs().with_k_p(0.1).with_k_i(0).with_k_d(0).with_k_s(0).with_k_v(0.124)
 
     # The closed-loop output type to use for the steer motors;
     # This affects the PID/FF gains for the steer motors
@@ -136,7 +127,6 @@ class TunerConstants:
         .with_drive_friction_voltage(_drive_friction_voltage)
     )
 
-
     # Front Left
     _front_left_drive_motor_id = 21
     _front_left_steer_motor_id = 20
@@ -180,7 +170,6 @@ class TunerConstants:
 
     _back_right_x_pos: units.meter = inchesToMeters(-11.25)
     _back_right_y_pos: units.meter = inchesToMeters(-10.25)
-
 
     front_left = _constants_creator.create_module_constants(
         _front_left_steer_motor_id,
@@ -246,9 +235,7 @@ class TunerConstants:
         )
 
 
-class TunerSwerveDrivetrain(
-    swerve.SwerveDrivetrain[hardware.TalonFX, hardware.TalonFX, hardware.CANcoder]
-):
+class TunerSwerveDrivetrain(swerve.SwerveDrivetrain[hardware.TalonFX, hardware.TalonFX, hardware.CANcoder]):
     """Swerve Drive class utilizing CTR Electronics' Phoenix 6 API with the selected device types."""
 
     @overload

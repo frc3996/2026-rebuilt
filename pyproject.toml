@@ -7,8 +7,45 @@ requires-python = ">=3.14"
 dependencies = [
     "phoenix6>=26.1.1",
     "robotpy-pathplannerlib>=2026.1.2",
+    "robotpy-rev",
     "robotpy[commands2]>=2026.2.1",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11",
+    "basedpyright>=1.29",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "RUF",   # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+"generated/*" = ["ALL"]
+"modules/limelight.py" = ["E501"]  # long docstrings in Limelight API
+"subsystems/command_swerve_drivetrain.py" = ["SIM"]  # CTRE auto-generated
+
+[tool.basedpyright]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+reportMissingModuleSource = false
+reportAttributeAccessIssue = "warning"  # REV API stubs are incomplete
+venvPath = "."
+venv = ".venv"
+exclude = ["generated", ".venv"]
 
 [tool.robotpy]
 

@@ -3,8 +3,8 @@ import math
 import ntcore
 import rev
 from commands2 import Subsystem
-from constants import CANIds
 
+from constants import CANIds
 
 # Homing constants
 HOMING_VOLTAGE = -0.75  # Volts toward hard stop  # TUNE
@@ -63,9 +63,7 @@ class HoodSubSystem(Subsystem):
         self._config.smartCurrentLimit(25)
         self._config.secondaryCurrentLimit(30)
         self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
-        self._config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
-        )
+        self._config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         self._config.closedLoop.P(KP, rev.ClosedLoopSlot.kSlot0)
         self._config.closedLoop.I(KI, rev.ClosedLoopSlot.kSlot0)
         self._config.closedLoop.D(KD, rev.ClosedLoopSlot.kSlot0)
@@ -126,9 +124,7 @@ class HoodSubSystem(Subsystem):
         """Drive hood to a position in motor turns (requires homing)."""
         if not self.is_homed:
             return
-        target_position = max(
-            self.min_rotations, min(target_position, self.max_rotations)
-        )
+        target_position = max(self.min_rotations, min(target_position, self.max_rotations))
         self._target_position = target_position
         self._position_active = True
         self._closed_loop.setReference(
@@ -175,9 +171,7 @@ class HoodSubSystem(Subsystem):
 
     def set_target_amps(self, target_amps: float) -> None:
         """Drive hood with current control (slot 1)."""
-        self._closed_loop.setReference(
-            target_amps, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1
-        )
+        self._closed_loop.setReference(target_amps, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1)
 
     # ── Homing helpers ─────────────────────────────────────────────
 

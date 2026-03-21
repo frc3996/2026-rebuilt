@@ -1,14 +1,16 @@
-
 import commands2
-from subsystems.shooter import ShooterSubSystem
-from subsystems.kicker import KickerSubSystem
+
 from subsystems.indexer import IndexerSubSystem
+from subsystems.kicker import KickerSubSystem
+from subsystems.shooter import ShooterSubSystem
+
 
 class Shoot(commands2.Command):
     """
     Basic shoot command for testing — runs shooter, kicker, and conveyor
     at fixed speeds without ballistics or auto-aim.
     """
+
     TEST_SHOOTER_RPM = 3000
     TEST_KICKER_RPM = 3000
     TEST_CONVEYOR_OUTPUT = 0.5  # Duty cycle (-1.0 to 1.0)

@@ -5,7 +5,7 @@ import ntcore
 from commands2 import Subsystem
 from wpilib import DataLogManager
 
-from constants import VISION_MAX_TAG_DISTANCE, VISION_MAX_ANGULAR_VELOCITY
+from constants import VISION_MAX_ANGULAR_VELOCITY, VISION_MAX_TAG_DISTANCE
 from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
 
@@ -46,9 +46,7 @@ class VisionSubsystem(Subsystem):
 
             use_mt2 = self._use_mt2_sub.get()
             if use_mt2:
-                estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
-                    self._camera
-                )
+                estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(self._camera)
             else:
                 estimate = LimelightHelpers.get_botpose_estimate_wpiblue(self._camera)
 
@@ -85,9 +83,7 @@ class VisionSubsystem(Subsystem):
         if estimate.tag_count == 0:
             return 0.5, 0.5, 0.5
 
-        avg_dist = (
-            sum(f.dist_to_camera for f in estimate.raw_fiducials) / estimate.tag_count
-        )
+        avg_dist = sum(f.dist_to_camera for f in estimate.raw_fiducials) / estimate.tag_count
 
         factor = 0.9 + (avg_dist**2 / 30)
 

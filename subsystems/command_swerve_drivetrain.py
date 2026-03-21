@@ -1,5 +1,6 @@
 import math
-from typing import Callable, overload
+from collections.abc import Callable
+from typing import overload
 
 from commands2 import Command, Subsystem
 from commands2.sysid import SysIdRoutine
@@ -133,9 +134,7 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
         arg3=None,
     ):
         Subsystem.__init__(self)
-        TunerSwerveDrivetrain.__init__(
-            self, drivetrain_constants, arg0, arg1, arg2, arg3
-        )
+        TunerSwerveDrivetrain.__init__(self, drivetrain_constants, arg0, arg1, arg2, arg3)
 
         self._sim_notifier: Notifier | None = None
         self._last_sim_time: units.second = 0.0
@@ -157,15 +156,13 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
                 # Reduce dynamic voltage to 4 V to prevent brownout
                 stepVoltage=4.0,
                 # Log state with SignalLogger class
-                recordState=lambda state: SignalLogger.write_string(
-                    "SysIdTranslation_State", SysIdRoutineLog.stateEnumToString(state)
-                )
-                and None,
+                recordState=lambda state: (
+                    SignalLogger.write_string("SysIdTranslation_State", SysIdRoutineLog.stateEnumToString(state))
+                    and None
+                ),
             ),
             SysIdRoutine.Mechanism(
-                lambda output: self.set_control(
-                    self._translation_characterization.with_volts(output)
-                ),
+                lambda output: self.set_control(self._translation_characterization.with_volts(output)),
                 lambda log: None,
                 self,
             ),
@@ -178,15 +175,12 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
                 # Use dynamic voltage of 7 V
                 stepVoltage=7.0,
                 # Log state with SignalLogger class
-                recordState=lambda state: SignalLogger.write_string(
-                    "SysIdSteer_State", SysIdRoutineLog.stateEnumToString(state)
-                )
-                and None,
+                recordState=lambda state: (
+                    SignalLogger.write_string("SysIdSteer_State", SysIdRoutineLog.stateEnumToString(state)) and None
+                ),
             ),
             SysIdRoutine.Mechanism(
-                lambda output: self.set_control(
-                    self._steer_characterization.with_volts(output)
-                ),
+                lambda output: self.set_control(self._steer_characterization.with_volts(output)),
                 lambda log: None,
                 self,
             ),
@@ -201,21 +195,20 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
                 stepVoltage=7.0,
                 # Use default timeout (10 s)
                 # Log state with SignalLogger class
-                recordState=lambda state: SignalLogger.write_string(
-                    "SysIdSteer_State", SysIdRoutineLog.stateEnumToString(state)
-                )
-                and None,
+                recordState=lambda state: (
+                    SignalLogger.write_string("SysIdSteer_State", SysIdRoutineLog.stateEnumToString(state)) and None
+                ),
             ),
             SysIdRoutine.Mechanism(
                 lambda output: (
-                    # output is actually radians per second, but SysId only supports "volts"
-                    self.set_control(
-                        self._rotation_characterization.with_rotational_rate(output)
-                    ),
-                    # also log the requested output for SysId
-                    SignalLogger.write_double("Rotational_Rate", output),
-                )
-                and None,
+                    (
+                        # output is actually radians per second, but SysId only supports "volts"
+                        self.set_control(self._rotation_characterization.with_rotational_rate(output)),
+                        # also log the requested output for SysId
+                        SignalLogger.write_double("Rotational_Rate", output),
+                    )
+                    and None
+                ),
                 lambda log: None,
                 self,
             ),
@@ -241,15 +234,9 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
             lambda: self.get_state().speeds,  # Supplier of current robot speeds
             # Consumer of ChassisSpeeds and feedforwards to drive the robot
             lambda speeds, feedforwards: self.set_control(
-                self._apply_robot_speeds.with_speeds(
-                    ChassisSpeeds.discretize(speeds, 0.020)
-                )
-                .with_wheel_force_feedforwards_x(
-                    feedforwards.robotRelativeForcesXNewtons
-                )
-                .with_wheel_force_feedforwards_y(
-                    feedforwards.robotRelativeForcesYNewtons
-                )
+                self._apply_robot_speeds.with_speeds(ChassisSpeeds.discretize(speeds, 0.020))
+                .with_wheel_force_feedforwards_x(feedforwards.robotRelativeForcesXNewtons)
+                .with_wheel_force_feedforwards_y(feedforwards.robotRelativeForcesYNewtons)
             ),
             PPHolonomicDriveController(
                 # PID constants for translation
@@ -259,14 +246,11 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
             ),
             config,
             # Assume the path needs to be flipped for Red vs Blue, this is normally the case
-            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue)
-            == DriverStation.Alliance.kRed,
+            lambda: (DriverStation.getAlliance() or DriverStation.Alliance.kBlue) == DriverStation.Alliance.kRed,
             self,  # Subsystem for requirements
         )
 
-    def apply_request(
-        self, request: Callable[[], swerve.requests.SwerveRequest]
-    ) -> Command:
+    def apply_request(self, request: Callable[[], swerve.requests.SwerveRequest]) -> Command:
         """
         Returns a command that applies the specified control request to this swerve drivetrain.
 
@@ -370,6 +354,4 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
         :returns: The pose at the given timestamp (or None if the buffer is empty).
         :rtype: Pose2d | None
         """
-        return TunerSwerveDrivetrain.sample_pose_at(
-            self, utils.fpga_to_current_time(timestamp)
-        )
+        return TunerSwerveDrivetrain.sample_pose_at(self, utils.fpga_to_current_time(timestamp))

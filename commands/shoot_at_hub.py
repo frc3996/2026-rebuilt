@@ -1,5 +1,7 @@
-from commands2 import Command
+from typing import ClassVar
+
 import ntcore
+from commands2 import Command
 
 from constants import HUB_POSITION
 
@@ -17,12 +19,12 @@ class ShootAtHub(Command):
     KICKER_TOLERANCE_RPM = 500
 
     # Lookup table: (distance_meters, hood_motor_turns, shooter_rpm)
-    SHOT_TABLE = [
-        (1.0, 1.0, 3500),   # Close shot
-        (2.0, 2.0, 3800),   # Medium shot
-        (3.0, 3.0, 4200),   # Far shot
-        (4.0, 3.5, 4500),   # Very far shot
-        (5.0, 4.0, 4800),   # Max range shot
+    SHOT_TABLE: ClassVar[list[tuple[float, float, int]]] = [
+        (1.0, 1.0, 3500),  # Close shot
+        (2.0, 2.0, 3800),  # Medium shot
+        (3.0, 3.0, 4200),  # Far shot
+        (4.0, 3.5, 4500),  # Very far shot
+        (5.0, 4.0, 4800),  # Max range shot
     ]
 
     def __init__(self, shooter, kicker, indexer, hood, vision, drivetrain):

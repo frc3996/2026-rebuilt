@@ -3,8 +3,8 @@ import math
 import ntcore
 import rev
 from commands2 import Subsystem
-from constants import CANIds, NEO_FREE_SPEED_RPM
 
+from constants import NEO_FREE_SPEED_RPM, CANIds
 
 # Homing constants
 HOMING_VOLTAGE = 0.75  # Volts toward deployed hard stop (positive)  # TUNE
@@ -72,9 +72,7 @@ class IntakeSubSystem(Subsystem):
         self._arm_config.smartCurrentLimit(25)
         self._arm_config.secondaryCurrentLimit(30)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
-        self._arm_config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
-        )
+        self._arm_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         self._arm_config.closedLoop.P(ARM_KP, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.I(ARM_KI, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.D(ARM_KD, rev.ClosedLoopSlot.kSlot0)
@@ -98,9 +96,7 @@ class IntakeSubSystem(Subsystem):
         roller_config.smartCurrentLimit(50)
         roller_config.secondaryCurrentLimit(60)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        roller_config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
-        )
+        roller_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         roller_config.closedLoop.P(0.0001, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
@@ -126,9 +122,7 @@ class IntakeSubSystem(Subsystem):
         self._arm_homed_pub = table.getBooleanTopic("Arm Homed").publish()
         self._arm_stall_count_pub = table.getIntegerTopic("Arm Stall Count").publish()
         self._arm_limits_set_pub = table.getBooleanTopic("Arm Limits Set").publish()
-        self._roller_velocity_pub = table.getDoubleTopic(
-            "Roller Velocity RPM"
-        ).publish()
+        self._roller_velocity_pub = table.getDoubleTopic("Roller Velocity RPM").publish()
         self._roller_target_pub = table.getDoubleTopic("Roller Target RPM").publish()
         self._roller_amps_pub = table.getDoubleTopic("Roller Amps").publish()
 
@@ -167,17 +161,13 @@ class IntakeSubSystem(Subsystem):
 
     def set_arm_target_amp(self, target_amp: float) -> None:
         """Drive arm with current control (slot 1)."""
-        self._arm_closed_loop.setReference(
-            target_amp, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1
-        )
+        self._arm_closed_loop.setReference(target_amp, rev.SparkBase.ControlType.kCurrent, rev.ClosedLoopSlot.kSlot1)
 
     def set_arm_target_position(self, target_position: float) -> None:
         """Drive arm to a position in motor turns (requires homing)."""
         if not self.homed:
             return
-        target_position = max(
-            self.min_rotations, min(target_position, self.max_rotations)
-        )
+        target_position = max(self.min_rotations, min(target_position, self.max_rotations))
         self._arm_target = target_position
         self._arm_position_active = True
         self._arm_closed_loop.setReference(

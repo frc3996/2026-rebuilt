@@ -1,12 +1,13 @@
 import commands2
 from wpilib import Timer
+
 from subsystems.hood import (
-    HoodSubSystem,
+    HOMING_TIMEOUT_SECONDS,
     HOMING_VOLTAGE,
+    STALL_CONFIRM_CYCLES,
     STALL_CURRENT_THRESHOLD,
     STALL_VELOCITY_THRESHOLD,
-    STALL_CONFIRM_CYCLES,
-    HOMING_TIMEOUT_SECONDS,
+    HoodSubSystem,
 )
 
 

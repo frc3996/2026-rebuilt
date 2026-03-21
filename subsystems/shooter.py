@@ -2,7 +2,7 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import CANIds, NEO_FREE_SPEED_RPM
+from constants import NEO_FREE_SPEED_RPM, CANIds
 
 
 class ShooterSubSystem(Subsystem):
@@ -13,24 +13,18 @@ class ShooterSubSystem(Subsystem):
 
     def __init__(self):
         super().__init__()
-        self._motor = rev.SparkMax(
-            CANIds.SHOOTER_LEADER, rev.SparkMax.MotorType.kBrushless
-        )
+        self._motor = rev.SparkMax(CANIds.SHOOTER_LEADER, rev.SparkMax.MotorType.kBrushless)
         self._encoder = self._motor.getEncoder()
         self._closed_loop = self._motor.getClosedLoopController()
 
-        self._follower = rev.SparkMax(
-            CANIds.SHOOTER_FOLLOWER, rev.SparkMax.MotorType.kBrushless
-        )
+        self._follower = rev.SparkMax(CANIds.SHOOTER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
 
         leader_config = rev.SparkBaseConfig()
         leader_config.voltageCompensation(12.0)
         leader_config.smartCurrentLimit(50)
         leader_config.secondaryCurrentLimit(60)
         leader_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        leader_config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
-        )
+        leader_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         leader_config.closedLoop.P(0.0001, rev.ClosedLoopSlot.kSlot0)
         leader_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
         leader_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
