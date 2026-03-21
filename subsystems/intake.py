@@ -5,10 +5,11 @@ from commands2 import Subsystem
 from constants import NEO_FREE_SPEED_RPM, CANIds
 
 # Homing constants
-HOMING_DUTYCYCLE = 0.75  # Duty cycle toward deployed hard stop (positive)  # TUNE
-STALL_CURRENT_THRESHOLD = 8.0  # Amps  # TUNE
-STALL_VELOCITY_THRESHOLD = 20.0  # RPM  # TUNE
-STALL_CONFIRM_CYCLES = 5  # Consecutive loops (~100ms at 20ms loop)
+HOMING_DUTYCYCLE = 0.15  # Duty cycle toward deployed hard stop (positive)  # TUNE
+HOMING_STARTUP_SECONDS = 0.5  # Grace period before stall detection  # TUNE
+STALL_CURRENT_THRESHOLD = 19.0  # Amps — free ~17A, stall >20A  # TUNE
+STALL_VELOCITY_THRESHOLD = 5.0  # RPM  # TUNE
+STALL_CONFIRM_CYCLES = 10  # Consecutive loops (~200ms at 20ms loop)
 HOMING_TIMEOUT_SECONDS = 5.0
 
 # Stall protection during position control
@@ -17,13 +18,13 @@ POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
 # Position constants
-DEPLOY_POSITION = 0.0  # Encoder zero at deployed hard stop (home position)
-STOW_POSITION = -3.0  # Retracted/stowed position in motor turns  # TUNE
+DEPLOY_POSITION = -2.0  # Slightly raised from hard stop (home position)
+STOW_POSITION = -38.0  # Retracted/stowed position in motor turns
 
 # PID defaults (slot 0 — position)
-ARM_KP = 0.15  # TUNE
+ARM_KP = 0.092
 ARM_KI = 0.0
-ARM_KD = 0.005  # TUNE
+ARM_KD = 0.002
 
 
 
@@ -41,12 +42,12 @@ class IntakeSubSystem(Subsystem):
         self._arm_encoder = self._arm_motor.getEncoder()
         self._arm_closed_loop = self._arm_motor.getClosedLoopController()
         self.homed: bool = False
-        self.limits_set: bool = False
+        self.limits_set: bool = True
         self._soft_limits_enabled: bool = True
 
         # Rotation limits — set via set_min_limit / set_max_limit
-        self.min_rotations: float = -4.0  # default until calibrated  # TUNE
-        self.max_rotations: float = 0.0  # deployed hard stop
+        self.min_rotations: float = -38.0
+        self.max_rotations: float = -2.0  # clear of deployed hard stop
 
         self._roller_motor = rev.SparkMax(CANIds.INTAKE_ROLLER, rev.SparkMax.MotorType.kBrushless)
         self._roller_encoder = self._roller_motor.getEncoder()
@@ -55,9 +56,9 @@ class IntakeSubSystem(Subsystem):
         # Arm config — position controlled, brake mode
         self._arm_config = rev.SparkBaseConfig()
         self._arm_config.inverted(True)  # positive = toward stow (retract)
-        self._arm_config.voltageCompensation(12.0)
-        self._arm_config.smartCurrentLimit(25)
-        self._arm_config.secondaryCurrentLimit(30)
+        self._arm_config.voltageCompensation(11.0)
+        self._arm_config.smartCurrentLimit(15)
+        self._arm_config.secondaryCurrentLimit(20)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
         self._arm_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         self._arm_config.closedLoop.P(ARM_KP, rev.ClosedLoopSlot.kSlot0)
@@ -76,7 +77,7 @@ class IntakeSubSystem(Subsystem):
 
         # Roller config — velocity controlled, coast mode
         roller_config = rev.SparkBaseConfig()
-        roller_config.voltageCompensation(12.0)
+        roller_config.voltageCompensation(11.0)
         roller_config.smartCurrentLimit(50)
         roller_config.secondaryCurrentLimit(60)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
@@ -135,9 +136,14 @@ class IntakeSubSystem(Subsystem):
 
     def set_arm_pid_gains(self, kp: float, ki: float, kd: float) -> None:
         """Update arm position PID gains (slot 0) at runtime."""
-        self._arm_closed_loop.setP(kp, rev.ClosedLoopSlot.kSlot0)
-        self._arm_closed_loop.setI(ki, rev.ClosedLoopSlot.kSlot0)
-        self._arm_closed_loop.setD(kd, rev.ClosedLoopSlot.kSlot0)
+        self._arm_config.closedLoop.P(kp, rev.ClosedLoopSlot.kSlot0)
+        self._arm_config.closedLoop.I(ki, rev.ClosedLoopSlot.kSlot0)
+        self._arm_config.closedLoop.D(kd, rev.ClosedLoopSlot.kSlot0)
+        self._arm_motor.configure(
+            self._arm_config,
+            rev.ResetMode.kNoResetSafeParameters,
+            rev.PersistMode.kNoPersistParameters,
+        )
 
     # ── Arm control ────────────────────────────────────────────────
 
@@ -218,6 +224,9 @@ class IntakeSubSystem(Subsystem):
         self.set_roller_target_speed(0)
 
     # ── Roller control ─────────────────────────────────────────────
+
+    def set_roller_duty_cycle(self, output: float) -> None:
+        self._roller_motor.set(output)
 
     def set_roller_target_speed(self, target_velocity: float) -> None:
         self._roller_target = target_velocity

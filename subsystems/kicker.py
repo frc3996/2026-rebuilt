@@ -21,28 +21,28 @@ class KickerSubSystem(Subsystem):
         self._left_encoder = self._left_motor.getEncoder()
         self._left_closed_loop = self._left_motor.getClosedLoopController()
 
-        motor_config = rev.SparkBaseConfig()
-        motor_config.voltageCompensation(12.0)
-        motor_config.smartCurrentLimit(50)
-        motor_config.secondaryCurrentLimit(60)
-        motor_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        motor_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
-        motor_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
-        motor_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
-        motor_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
-        motor_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
-        motor_config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
+        self._config = rev.SparkBaseConfig()
+        self._config.voltageCompensation(11.0)
+        self._config.smartCurrentLimit(50)
+        self._config.secondaryCurrentLimit(60)
+        self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
+        self._config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
+        self._config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
 
         self._right_motor.configure(
-            motor_config,
+            self._config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
 
         # Invert left so both spin inward
-        motor_config.inverted(True)
+        self._config.inverted(True)
         self._left_motor.configure(
-            motor_config,
+            self._config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
@@ -55,6 +55,30 @@ class KickerSubSystem(Subsystem):
         self._target_pub = table.getDoubleTopic("Target RPM").publish()
         self._right_amps_pub = table.getDoubleTopic("Right Amps").publish()
         self._left_amps_pub = table.getDoubleTopic("Left Amps").publish()
+
+    def set_duty_cycle(self, output: float) -> None:
+        self._right_motor.set(output)
+        self._left_motor.set(output)
+
+    def set_pid_gains(self, kp: float, ki: float, kd: float) -> None:
+        """Update velocity PID gains (slot 0) for both motors at runtime."""
+        self._config.closedLoop.P(kp, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.I(ki, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.D(kd, rev.ClosedLoopSlot.kSlot0)
+        # Config has inverted=True from init; apply to left first
+        self._left_motor.configure(
+            self._config,
+            rev.ResetMode.kNoResetSafeParameters,
+            rev.PersistMode.kNoPersistParameters,
+        )
+        # Temporarily un-invert for right motor
+        self._config.inverted(False)
+        self._right_motor.configure(
+            self._config,
+            rev.ResetMode.kNoResetSafeParameters,
+            rev.PersistMode.kNoPersistParameters,
+        )
+        self._config.inverted(True)
 
     def get_current_speed(self):
         return max(self._right_encoder.getVelocity(), self._left_encoder.getVelocity())

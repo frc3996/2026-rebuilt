@@ -19,6 +19,8 @@ from wpimath.units import rotationsToRadians
 from commands.auto_home import AutoHome
 from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
+from commands.auto_tune_kicker import AutoTuneKickerCommand
+from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
 from commands.shoot_at_hub import ShootAtHub
@@ -106,9 +108,9 @@ class RobotContainer:
 
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings — uncomment ONE group at a time:
-        self.configureHardwareTestBindings()
+        # self.configureHardwareTestBindings()
         # self.configureShotTuningBindings()
-        # self.configureTuningTestBindings()
+        self.configureTuningTestBindings()
         # self.configureSwerveButtonBindings()
         # self.configureCompetitionBindings()
         # self.configureManualBindings()
@@ -191,15 +193,15 @@ class RobotContainer:
 
     def configureHardwareTestBindings(self):
         """
-        Hardware bring-up bindings — all hold-to-run for safety, NT-tunable speeds.
+        Hardware bring-up bindings — all hold-to-run, duty cycle only (no PID).
         Single controller. No swerve.
 
         Button layout:
-          Y  (hold)    = Shooter flywheel (velocity RPM)
-          B  (hold)    = Kicker (velocity RPM)
+          Y  (hold)    = Shooter flywheel (duty cycle)
+          B  (hold)    = Kicker (duty cycle)
           RB (hold)    = Conveyor (duty cycle)
-          RT (hold)    = Intake roller (velocity RPM)
-          LT (hold)    = Intake arm (current amps)
+          RT (hold)    = Intake roller (duty cycle)
+          LT (hold)    = Intake arm (duty cycle)
           A  (hold)    = Hood up (duty cycle)
           X  (hold)    = Hood down (duty cycle)
           Start        = Home hood
@@ -214,17 +216,17 @@ class RobotContainer:
         """
         table = NetworkTableInstance.getDefault().getTable("HWTest")
 
-        shooter_rpm_sub = table.getDoubleTopic("Shooter RPM").subscribe(5767.0)
-        table.getDoubleTopic("Shooter RPM").publish().set(5767.0)
+        shooter_output_sub = table.getDoubleTopic("Shooter Output").subscribe(0.3)
+        table.getDoubleTopic("Shooter Output").publish().set(0.3)
 
-        kicker_rpm_sub = table.getDoubleTopic("Kicker RPM").subscribe(5767.0)
-        table.getDoubleTopic("Kicker RPM").publish().set(5767.0)
+        kicker_output_sub = table.getDoubleTopic("Kicker Output").subscribe(0.3)
+        table.getDoubleTopic("Kicker Output").publish().set(0.3)
 
-        conveyor_output_sub = table.getDoubleTopic("Conveyor Output").subscribe(0.3)
-        table.getDoubleTopic("Conveyor Output").publish().set(0.3)
+        conveyor_output_sub = table.getDoubleTopic("Conveyor Output").subscribe(1.0)
+        table.getDoubleTopic("Conveyor Output").publish().set(1.0)
 
-        roller_rpm_sub = table.getDoubleTopic("Roller RPM").subscribe(1000.0)
-        table.getDoubleTopic("Roller RPM").publish().set(1000.0)
+        roller_output_sub = table.getDoubleTopic("Roller Output").subscribe(1.0)
+        table.getDoubleTopic("Roller Output").publish().set(1.0)
 
         arm_output_sub = table.getDoubleTopic("Arm Output").subscribe(0.15)
         table.getDoubleTopic("Arm Output").publish().set(0.15)
@@ -233,26 +235,28 @@ class RobotContainer:
         table.getDoubleTopic("Hood Output").publish().set(0.15)
 
         hood_pos_sub = table.getDoubleTopic("Hood Position").subscribe(0.0)
-        table.getDoubleTopic("Hood Position").publish().set(0.0)
+        hood_pos_pub = table.getDoubleTopic("Hood Position").publish()
+        hood_pos_pub.set(0.0)
 
         arm_pos_sub = table.getDoubleTopic("Arm Position").subscribe(0.0)
-        table.getDoubleTopic("Arm Position").publish().set(0.0)
+        arm_pos_pub = table.getDoubleTopic("Arm Position").publish()
+        arm_pos_pub.set(0.0)
 
-        # ── Motor testing (hold-to-run) ────────────────────────────
+        # ── Motor testing (hold-to-run, duty cycle only) ──────────
 
-        # Y: Hold to run shooter flywheel at NT-tunable RPM
+        # Y: Hold to run shooter flywheel at NT-tunable duty cycle
         self._joystick_1.y().whileTrue(
             cmd.runEnd(
-                lambda: self.shooter.set_target_speed(shooter_rpm_sub.get()),
+                lambda: self.shooter.set_duty_cycle(shooter_output_sub.get()),
                 self.shooter.stop,
                 self.shooter,
             )
         )
 
-        # B: Hold to run kicker at NT-tunable RPM
+        # B: Hold to run kicker at NT-tunable duty cycle
         self._joystick_1.b().whileTrue(
             cmd.runEnd(
-                lambda: self.kicker.set_target_speed(kicker_rpm_sub.get()),
+                lambda: self.kicker.set_duty_cycle(kicker_output_sub.get()),
                 self.kicker.stop,
                 self.kicker,
             )
@@ -267,11 +271,11 @@ class RobotContainer:
             )
         )
 
-        # RT: Hold to run intake roller at NT-tunable RPM
+        # RT: Hold to run intake roller at NT-tunable duty cycle
         self._joystick_1.rightTrigger().whileTrue(
             cmd.runEnd(
-                lambda: self.intake.set_roller_target_speed(roller_rpm_sub.get()),
-                lambda: self.intake.set_roller_target_speed(0),
+                lambda: self.intake.set_roller_duty_cycle(roller_output_sub.get()),
+                lambda: self.intake.set_roller_duty_cycle(0),
                 self.intake,
             )
         )
@@ -285,31 +289,37 @@ class RobotContainer:
             )
         )
 
-        # A: Hold to drive hood up (positive duty cycle)
+        # A: Hold to drive hood up (positive duty cycle), hold position on release
         self._joystick_1.a().whileTrue(
             cmd.runEnd(
                 lambda: self.hood.set_duty_cycle(hood_output_sub.get()),
-                self.hood.stop,
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
                 self.hood,
             )
         )
 
-        # X: Hold to drive hood down (negative duty cycle)
+        # X: Hold to drive hood down (negative duty cycle), hold position on release
         self._joystick_1.x().whileTrue(
             cmd.runEnd(
                 lambda: self.hood.set_duty_cycle(-hood_output_sub.get()),
-                self.hood.stop,
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
                 self.hood,
             )
         )
 
         # ── Homing ────────────────────────────────────────────────
 
-        # Start: Home hood
-        self._joystick_1.start().onTrue(HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS))
+        # Start: Home hood, then move to min soft limit
+        self._joystick_1.start().onTrue(
+            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+            .finallyDo(lambda interrupted: hood_pos_pub.set(self.hood.min_rotations))
+        )
 
-        # Back: Home intake arm
-        self._joystick_1.back().onTrue(HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS))
+        # Back: Home intake arm, reset NT position regardless of outcome
+        self._joystick_1.back().onTrue(
+            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
+            .finallyDo(lambda interrupted: arm_pos_pub.set(self.intake.get_arm_position()))
+        )
 
         # ── Limit calibration (POV — one-shot) ────────────────────
 
@@ -325,11 +335,22 @@ class RobotContainer:
         # POV Left: Set intake min limit at current position
         self._joystick_1.povLeft().onTrue(cmd.runOnce(self.intake.set_min_limit, self.intake))
 
-        # ── Default commands — track NT positions after homing ─────
+        # ── Default commands — track NT positions after homing, stop if not homed ─
 
-        self.hood.setDefaultCommand(self.hood.run(lambda: self.hood.set_target_position(hood_pos_sub.get())))
-
-        self.intake.setDefaultCommand(self.intake.run(lambda: self.intake.set_arm_target_position(arm_pos_sub.get())))
+        self.hood.setDefaultCommand(
+            self.hood.run(
+                lambda: self.hood.set_target_position(hood_pos_sub.get()) if self.hood.is_homed else self.hood.stop()
+            )
+        )
+        self.intake.setDefaultCommand(
+            self.intake.run(
+                lambda: (
+                    self.intake.set_arm_target_position(arm_pos_sub.get())
+                    if self.intake.homed
+                    else self.intake.stop_arm()
+                )
+            )
+        )
 
     def configureShotTuningBindings(self):
         """
@@ -401,14 +422,51 @@ class RobotContainer:
 
     def configureTuningTestBindings(self):
         """
-        PID auto-tuning bindings. Requires homing and limits set first.
+        PID auto-tuning + stick position control. Requires homing first.
 
         Button layout:
-          Start = Auto-tune hood PID (Z-N relay method)
-          Back  = Auto-tune intake arm PID (Z-N relay method)
+          Left stick Y  = Hood position (center=min, up=max soft limit)
+          Right stick Y = Intake arm position (center=home, down=min soft limit)
+          LB            = Home hood
+          RB            = Home intake arm
+          Start         = Auto-tune hood PID (Z-N relay method)
+          Back          = Auto-tune intake arm PID (Z-N relay method)
+          Y             = Auto-tune shooter PID (Z-N relay method)
+          B             = Auto-tune kicker PID (Z-N relay method)
         """
+        # Left stick Y: hood position — center=min, full up=max
+        # getLeftY() returns -1 (up) to +1 (down), clamp negative half only
+        def _hood_from_stick():
+            if not self.hood.is_homed:
+                return
+            raw = -self._joystick_1.getLeftY()  # 0..1 when pushed up
+            t = max(0.0, raw)
+            pos = self.hood.min_rotations + t * (self.hood.max_rotations - self.hood.min_rotations)
+            self.hood.set_target_position(pos)
+
+        self.hood.setDefaultCommand(self.hood.run(_hood_from_stick))
+
+        # Right stick Y: intake arm — center=home (0), full down=min soft limit
+        # getLeftY() returns +1 when pushed down
+        def _intake_from_stick():
+            if not self.intake.homed:
+                return
+            raw = self._joystick_1.getRightY()  # 0..1 when pushed down
+            t = max(0.0, raw)
+            pos = self.intake.max_rotations + t * (self.intake.min_rotations - self.intake.max_rotations)
+            self.intake.set_arm_target_position(pos)
+
+        self.intake.setDefaultCommand(self.intake.run(_intake_from_stick))
+
+        # Homing
+        self._joystick_1.leftBumper().onTrue(HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS))
+        self._joystick_1.rightBumper().onTrue(HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS))
+
+        # Auto-tune
         self._joystick_1.start().onTrue(AutoTuneHoodCommand(self.hood))
         self._joystick_1.back().onTrue(AutoTuneIntakeCommand(self.intake))
+        self._joystick_1.y().onTrue(AutoTuneShooterCommand(self.shooter))
+        self._joystick_1.b().onTrue(AutoTuneKickerCommand(self.kicker))
 
     def configureCompetitionBindings(self):
         # Right trigger: Shoot at hub while aiming

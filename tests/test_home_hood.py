@@ -1,10 +1,11 @@
 from unittest.mock import MagicMock
 
 import pytest
-from wpilib import Timer
 
 from commands.home_hood import HomeHood
 from subsystems.hood import (
+    HOMING_STARTUP_SECONDS,
+    HOMING_TIMEOUT_SECONDS,
     STALL_CONFIRM_CYCLES,
     STALL_CURRENT_THRESHOLD,
     STALL_VELOCITY_THRESHOLD,
@@ -18,12 +19,27 @@ def hood():
     return h
 
 
+def _make_timer(past_startup=True):
+    """Create a mock timer. past_startup=True means startup grace period has elapsed."""
+    timer = MagicMock()
+
+    def _has_elapsed(seconds):
+        if seconds >= HOMING_TIMEOUT_SECONDS:
+            return False
+        if seconds >= HOMING_STARTUP_SECONDS:
+            return past_startup
+        return True
+
+    timer.hasElapsed.side_effect = _has_elapsed
+    return timer
+
+
 @pytest.fixture
 def cmd(hood):
     c = HomeHood.__new__(HomeHood)
     c.hood = hood
     c._stall_counter = 0
-    c._timer = Timer()
+    c._timer = _make_timer(past_startup=True)
     c._timed_out = False
     return c
 
@@ -34,7 +50,7 @@ def _simulate_stall(hood):
 
 
 def _simulate_no_stall(hood):
-    hood.get_output_current.return_value = 1.0
+    hood.get_output_current.return_value = 0.03
     hood.get_velocity.return_value = 100.0
 
 
@@ -83,9 +99,9 @@ def test_timeout_does_not_home(cmd, hood):
     cmd.initialize()
     _simulate_no_stall(hood)
 
-    # Simulate timer elapsed
+    # Simulate timer elapsed past timeout
     cmd._timer = MagicMock()
-    cmd._timer.hasElapsed.return_value = True
+    cmd._timer.hasElapsed.return_value = True  # all thresholds elapsed
     cmd.execute()
     assert cmd.isFinished()
 

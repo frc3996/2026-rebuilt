@@ -17,7 +17,7 @@ class IndexerSubSystem(Subsystem):
 
         config = rev.SparkBaseConfig()
         config.inverted(True)  # positive = toward kicker (upward)
-        config.voltageCompensation(12.0)
+        config.voltageCompensation(11.0)
         config.smartCurrentLimit(30)
         config.secondaryCurrentLimit(40)
         config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

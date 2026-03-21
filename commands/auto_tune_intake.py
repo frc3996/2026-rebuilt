@@ -1,6 +1,7 @@
 import math
 
 import commands2
+import ntcore
 from wpilib import Timer
 
 from subsystems.intake import IntakeSubSystem
@@ -29,6 +30,13 @@ class AutoTuneIntakeCommand(commands2.Command):
         self._above: bool = False
         self._timer = Timer()
         self._timed_out: bool = False
+
+        table = ntcore.NetworkTableInstance.getDefault().getTable("AutoTuneIntake")
+        self._ku_pub = table.getDoubleTopic("Ku").publish()
+        self._tu_pub = table.getDoubleTopic("Tu").publish()
+        self._kp_pub = table.getDoubleTopic("Kp").publish()
+        self._ki_pub = table.getDoubleTopic("Ki").publish()
+        self._kd_pub = table.getDoubleTopic("Kd").publish()
 
     def initialize(self) -> None:
         if not self.intake.homed or not self.intake.limits_set:
@@ -80,6 +88,12 @@ class AutoTuneIntakeCommand(commands2.Command):
         ki = 0.0
 
         self.intake.set_arm_pid_gains(kp, ki, kd)
+
+        self._ku_pub.set(ku)
+        self._tu_pub.set(tu)
+        self._kp_pub.set(kp)
+        self._ki_pub.set(ki)
+        self._kd_pub.set(kd)
 
     def isFinished(self) -> bool:
         if self._timed_out:

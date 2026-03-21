@@ -26,6 +26,11 @@ def cmd(hood):
     c._above = False
     c._timer = Timer()
     c._timed_out = False
+    c._ku_pub = MagicMock()
+    c._tu_pub = MagicMock()
+    c._kp_pub = MagicMock()
+    c._ki_pub = MagicMock()
+    c._kd_pub = MagicMock()
     return c
 
 

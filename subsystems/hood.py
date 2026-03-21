@@ -5,10 +5,11 @@ from commands2 import Subsystem
 from constants import CANIds
 
 # Homing constants
-HOMING_DUTYCYCLE = -0.75  # Duty cycle toward hard stop  # TUNE
-STALL_CURRENT_THRESHOLD = 8.0  # Amps  # TUNE
-STALL_VELOCITY_THRESHOLD = 20.0  # RPM  # TUNE
-STALL_CONFIRM_CYCLES = 5  # Consecutive loops (~100ms at 20ms loop)
+HOMING_DUTYCYCLE = -0.15  # Duty cycle toward hard stop  # TUNE
+HOMING_STARTUP_SECONDS = 0.5  # Grace period before stall detection  # TUNE
+STALL_CURRENT_THRESHOLD = 0.44  # Amps  # TUNE
+STALL_VELOCITY_THRESHOLD = 1.0  # RPM  # TUNE
+STALL_CONFIRM_CYCLES = 10  # Consecutive loops (~200ms at 20ms loop)
 HOMING_TIMEOUT_SECONDS = 5.0
 
 # Stall protection during position control
@@ -17,12 +18,12 @@ POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
 # Position constants
-STOW_POSITION = 0.0  # Motor turns at home position
+STOW_POSITION = 0.5  # Motor turns — min soft limit, clear of hard stop
 
 # PID defaults (slot 0 — position)
-KP = 0.1  # TUNE
+KP = 0.092
 KI = 0.0
-KD = 0.002  # TUNE
+KD = 0.0001
 
 
 class HoodSubSystem(Subsystem):
@@ -39,17 +40,18 @@ class HoodSubSystem(Subsystem):
         self._encoder = self._motor.getEncoder()
         self._closed_loop = self._motor.getClosedLoopController()
         self.is_homed: bool = False
-        self.limits_set: bool = False
+        self.limits_set: bool = True
         self._soft_limits_enabled: bool = True
 
         # Rotation limits — set via set_min_limit / set_max_limit
-        self.min_rotations: float = 0.0
-        self.max_rotations: float = 100.0  # default until calibrated  # TUNE
+        self.min_rotations: float = 0.5
+        self.max_rotations: float = 6.4
 
         self._config = rev.SparkBaseConfig()
-        self._config.voltageCompensation(12.0)
-        self._config.smartCurrentLimit(25)
-        self._config.secondaryCurrentLimit(30)
+        self._config.inverted(True)
+        self._config.voltageCompensation(11.0)
+        self._config.smartCurrentLimit(15)
+        self._config.secondaryCurrentLimit(20)
         self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
         self._config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         self._config.closedLoop.P(KP, rev.ClosedLoopSlot.kSlot0)
@@ -94,9 +96,14 @@ class HoodSubSystem(Subsystem):
 
     def set_pid_gains(self, kp: float, ki: float, kd: float) -> None:
         """Update position PID gains (slot 0) at runtime."""
-        self._closed_loop.setP(kp, rev.ClosedLoopSlot.kSlot0)
-        self._closed_loop.setI(ki, rev.ClosedLoopSlot.kSlot0)
-        self._closed_loop.setD(kd, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.P(kp, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.I(ki, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.D(kd, rev.ClosedLoopSlot.kSlot0)
+        self._motor.configure(
+            self._config,
+            rev.ResetMode.kNoResetSafeParameters,
+            rev.PersistMode.kNoPersistParameters,
+        )
 
     # ── Position control ───────────────────────────────────────────
 

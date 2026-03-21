@@ -19,25 +19,25 @@ class ShooterSubSystem(Subsystem):
 
         self._follower = rev.SparkMax(CANIds.SHOOTER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
 
-        leader_config = rev.SparkBaseConfig()
-        leader_config.voltageCompensation(12.0)
-        leader_config.smartCurrentLimit(50)
-        leader_config.secondaryCurrentLimit(60)
-        leader_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
-        leader_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
-        leader_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
-        leader_config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
+        self._config = rev.SparkBaseConfig()
+        self._config.voltageCompensation(11.0)
+        self._config.smartCurrentLimit(50)
+        self._config.secondaryCurrentLimit(60)
+        self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
+        self._config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
+        self._config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
         self._motor.configure(
-            leader_config,
+            self._config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
 
         follower_config = rev.SparkBaseConfig()
-        follower_config.voltageCompensation(12.0)
+        follower_config.voltageCompensation(11.0)
         follower_config.smartCurrentLimit(50)
         follower_config.secondaryCurrentLimit(60)
         follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
@@ -57,6 +57,20 @@ class ShooterSubSystem(Subsystem):
         self._target_pub = table.getDoubleTopic("Target RPM").publish()
         self._amps_pub = table.getDoubleTopic("Amps").publish()
         self._temp_pub = table.getDoubleTopic("Temperature C").publish()
+
+    def set_duty_cycle(self, output: float) -> None:
+        self._motor.set(output)
+
+    def set_pid_gains(self, kp: float, ki: float, kd: float) -> None:
+        """Update velocity PID gains (slot 0) at runtime."""
+        self._config.closedLoop.P(kp, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.I(ki, rev.ClosedLoopSlot.kSlot0)
+        self._config.closedLoop.D(kd, rev.ClosedLoopSlot.kSlot0)
+        self._motor.configure(
+            self._config,
+            rev.ResetMode.kNoResetSafeParameters,
+            rev.PersistMode.kNoPersistParameters,
+        )
 
     def get_current_speed(self):
         return self._encoder.getVelocity()
