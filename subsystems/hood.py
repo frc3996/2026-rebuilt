@@ -13,8 +13,8 @@ STALL_CONFIRM_CYCLES = 10  # Consecutive loops (~200ms at 20ms loop)
 HOMING_TIMEOUT_SECONDS = 5.0
 
 # Stall protection during position control
-POSITION_STALL_CURRENT = 10.0  # Amps — lower than homing, catches sustained load  # TUNE
-POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
+POSITION_STALL_CURRENT = 1.0  # Amps — free ~0.03A, stall >0.44A  # TUNE
+POSITION_STALL_VELOCITY = 1.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
 # Position constants

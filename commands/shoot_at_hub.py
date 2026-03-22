@@ -2,9 +2,16 @@ from typing import ClassVar
 
 import ntcore
 from commands2 import Command
+from wpilib import DriverStation
 from wpimath.geometry import Translation2d
 
-HUB_POSITION = Translation2d(8.23, 4.115)  # meters (center of field)
+# Field dimensions: 651.22 × 317.69 inches
+FIELD_LENGTH_M = 651.22 * 0.0254  # 16.541 m
+HUB_X_M = 182.11 * 0.0254  # 4.626 m from alliance wall
+HUB_Y_M = 158.84 * 0.0254  # 4.035 m — centered widthwise
+
+BLUE_HUB = Translation2d(HUB_X_M, HUB_Y_M)
+RED_HUB = Translation2d(FIELD_LENGTH_M - HUB_X_M, HUB_Y_M)
 
 
 class ShootAtHub(Command):
@@ -99,7 +106,9 @@ class ShootAtHub(Command):
 
     def calculate_distance_to_hub(self) -> float:
         robot_pose = self.drivetrain.get_state().pose
-        return robot_pose.translation().distance(HUB_POSITION)
+        alliance = DriverStation.getAlliance()
+        hub = RED_HUB if alliance == DriverStation.Alliance.kRed else BLUE_HUB
+        return robot_pose.translation().distance(hub)
 
     def compute_ballistics(self, distance: float) -> tuple[float, float]:
         if distance <= self.SHOT_TABLE[0][0]:

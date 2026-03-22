@@ -79,10 +79,11 @@ class MyRobot(commands2.TimedCommandRobot):
         if self.autonomousCommand:
             commands2.CommandScheduler.getInstance().cancel(self.autonomousCommand)
 
-        # Auto-home hood and intake arm — enable when ready
-        # commands2.CommandScheduler.getInstance().schedule(
-        #     self.container.getAutoHomeCommand()
-        # )
+        # Auto-home on first enable — skips if already homed
+        if not self.container.hood.is_homed or not self.container.intake.homed:
+            commands2.CommandScheduler.getInstance().schedule(
+                self.container.getAutoHomeCommand()
+            )
 
     def teleopPeriodic(self) -> None:
         """This function is called periodically during operator control"""
