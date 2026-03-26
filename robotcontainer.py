@@ -21,10 +21,11 @@ from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
 from commands.auto_tune_kicker import AutoTuneKickerCommand
 from commands.auto_tune_shooter import AutoTuneShooterCommand
+from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
 from commands.safe_retract_intake import SafeRetractIntake
-from commands.shoot_at_hub import ShootAtHub
+from commands.shoot_at_hub import HubShot
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
@@ -36,11 +37,21 @@ from subsystems.vision import LIMELIGHT_CAMERA_NAME, VisionSubsystem
 from telemetry import Telemetry
 
 
+import math
+
+# Flywheel speed compensation constants
+_FLYWHEEL_DIAMETER_M = 4 * 0.0254  # 4 inches
+_FLYWHEEL_CIRCUMFERENCE = math.pi * _FLYWHEEL_DIAMETER_M
+_GEAR_RATIO = 1.3  # motor:flywheel
+_SLIP_FACTOR = 0.85  # high — kicker pre-accelerates the ball
+
+
 def joystick_filter(value):
-    """Squared response curve with 5% deadband. Preserves sign for finer control near center."""
+    """Squared response curve with 5% deadband. Rescales so output ramps smoothly from 0."""
     if abs(value) < 0.05:
         return 0
-    return value * value * (1 if value > 0 else -1)
+    scaled = (abs(value) - 0.05) / 0.95
+    return scaled * scaled * (1 if value > 0 else -1)
 
 
 class RobotContainer:
@@ -52,14 +63,20 @@ class RobotContainer:
     """
 
     def __init__(self) -> None:
-        self._max_speed = 1.0 * TunerConstants.speed_at_12_volts  # speed_at_12_volts desired top speed
-        self._max_angular_rate = rotationsToRadians(0.75)  # 3/4 of a rotation per second max angular velocity
+        self._max_speed = (
+            1.0 * TunerConstants.speed_at_12_volts
+        )  # speed_at_12_volts desired top speed
+        self._max_angular_rate = rotationsToRadians(
+            0.75
+        )  # 3/4 of a rotation per second max angular velocity
 
         # Setting up bindings for necessary control of the swerve drive platform
         self._drive = (
             swerve.requests.FieldCentric()
             .with_deadband(self._max_speed * 0.1)
-            .with_rotational_deadband(self._max_angular_rate * 0.1)  # Add a 10% deadband
+            .with_rotational_deadband(
+                self._max_angular_rate * 0.1
+            )  # Add a 10% deadband
             .with_drive_request_type(
                 swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
             )  # Use open-loop control for drive motors
@@ -73,8 +90,10 @@ class RobotContainer:
         self._snap_angle = (
             swerve.requests.FieldCentricFacingAngle()
             .with_deadband(self._max_speed * 0.1)
-            .with_drive_request_type(swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE)
-            .with_heading_pid(1, 0, 0)
+            .with_drive_request_type(
+                swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
+            )
+            .with_heading_pid(8, 0, 0.2)
         )
 
         self._logger = Telemetry(self._max_speed)
@@ -88,7 +107,9 @@ class RobotContainer:
         SmartDashboard.putData("Auto Mode", self._auto_chooser)
 
         # Add vision
-        self.limelight = VisionSubsystem(swerve=self.drivetrain, camera=LIMELIGHT_CAMERA_NAME)
+        self.limelight = VisionSubsystem(
+            swerve=self.drivetrain, camera=LIMELIGHT_CAMERA_NAME
+        )
 
         # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
@@ -109,11 +130,11 @@ class RobotContainer:
 
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings — uncomment ONE group at a time:
-        # self.configureHardwareTestBindings()
-        self.configureTuningTestBindings()
         # self.configureSwerveButtonBindings()
+        # self.configureHardwareTestBindings()
+        # self.configureTuningTestBindings()
+        self.configureManualBindings()
         # self.configureCompetitionBindings()
-        # self.configureManualBindings()
 
     def configureSwerveButtonBindings(self) -> None:
         """
@@ -135,7 +156,8 @@ class RobotContainer:
                         joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
                     )  # Drive left with negative X (left)
                     .with_rotational_rate(
-                        joystick_filter(-self._joystick_1.getRightX()) * self._max_angular_rate
+                        joystick_filter(-self._joystick_1.getRightX())
+                        * self._max_angular_rate
                     )  # Drive counterclockwise with negative X (left)
                 )
             )
@@ -144,31 +166,44 @@ class RobotContainer:
         # Idle while the robot is disabled. This ensures the configured
         # neutral mode is applied to the drive motors while disabled.
         idle = swerve.requests.Idle()
-        Trigger(DriverStation.isDisabled).whileTrue(self.drivetrain.apply_request(lambda: idle).ignoringDisable(True))
+        Trigger(DriverStation.isDisabled).whileTrue(
+            self.drivetrain.apply_request(lambda: idle).ignoringDisable(True)
+        )
 
-        self._joystick_1.a().whileTrue(self.drivetrain.apply_request(lambda: self._brake))
+        self._joystick_1.a().whileTrue(
+            self.drivetrain.apply_request(lambda: self._brake)
+        )
         self._joystick_1.b().whileTrue(
             self.drivetrain.apply_request(
                 lambda: self._point.with_module_direction(
                     Rotation2d(
-                        joystick_filter(-self._joystick_1.getLeftY()), joystick_filter(-self._joystick_1.getLeftX())
+                        joystick_filter(-self._joystick_1.getLeftY()),
+                        joystick_filter(-self._joystick_1.getLeftX()),
                     )
                 )
             )
         )
 
         self._joystick_1.povUp().whileTrue(
-            self.drivetrain.apply_request(lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0))
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0)
+            )
         )
         self._joystick_1.povDown().whileTrue(
-            self.drivetrain.apply_request(lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0))
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0)
+            )
         )
 
         self._joystick_1.povLeft().whileTrue(
-            self.drivetrain.apply_request(lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(-0.5))
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(-0.5)
+            )
         )
         self._joystick_1.povRight().whileTrue(
-            self.drivetrain.apply_request(lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(0.5))
+            self.drivetrain.apply_request(
+                lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(0.5)
+            )
         )
 
         # Run SysId routines when holding back/start and X/Y.
@@ -187,9 +222,13 @@ class RobotContainer:
         # )
 
         # reset the field-centric heading on left bumper press
-        self._joystick_1.leftBumper().onTrue(self.drivetrain.runOnce(self.drivetrain.seed_field_centric))
+        self._joystick_1.leftBumper().onTrue(
+            self.drivetrain.runOnce(self.drivetrain.seed_field_centric)
+        )
 
-        self.drivetrain.register_telemetry(lambda state: self._logger.telemeterize(state))
+        self.drivetrain.register_telemetry(
+            lambda state: self._logger.telemeterize(state)
+        )
 
     def configureHardwareTestBindings(self):
         """
@@ -311,14 +350,18 @@ class RobotContainer:
 
         # Start: Home hood, then move to min soft limit
         self._joystick_1.start().onTrue(
-            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+            HomeHood(self.hood)
+            .withTimeout(HOMING_TIMEOUT_SECONDS)
             .finallyDo(lambda interrupted: hood_pos_pub.set(self.hood.min_rotations))
         )
 
         # Back: Home intake arm, reset NT position regardless of outcome
         self._joystick_1.back().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-            .finallyDo(lambda interrupted: arm_pos_pub.set(self.intake.get_arm_position()))
+            HomeIntake(self.intake)
+            .withTimeout(HOMING_TIMEOUT_SECONDS)
+            .finallyDo(
+                lambda interrupted: arm_pos_pub.set(self.intake.get_arm_position())
+            )
         )
 
         # ── Limit calibration (POV — one-shot) ────────────────────
@@ -327,19 +370,29 @@ class RobotContainer:
         self._joystick_1.povUp().onTrue(cmd.runOnce(self.hood.set_max_limit, self.hood))
 
         # POV Down: Set hood min limit at current position
-        self._joystick_1.povDown().onTrue(cmd.runOnce(self.hood.set_min_limit, self.hood))
+        self._joystick_1.povDown().onTrue(
+            cmd.runOnce(self.hood.set_min_limit, self.hood)
+        )
 
         # POV Right: Set intake max limit at current position
-        self._joystick_1.povRight().onTrue(cmd.runOnce(self.intake.set_max_limit, self.intake))
+        self._joystick_1.povRight().onTrue(
+            cmd.runOnce(self.intake.set_max_limit, self.intake)
+        )
 
         # POV Left: Set intake min limit at current position
-        self._joystick_1.povLeft().onTrue(cmd.runOnce(self.intake.set_min_limit, self.intake))
+        self._joystick_1.povLeft().onTrue(
+            cmd.runOnce(self.intake.set_min_limit, self.intake)
+        )
 
         # ── Default commands — track NT positions after homing, stop if not homed ─
 
         self.hood.setDefaultCommand(
             self.hood.run(
-                lambda: self.hood.set_target_position(hood_pos_sub.get()) if self.hood.is_homed else self.hood.stop()
+                lambda: (
+                    self.hood.set_target_position(hood_pos_sub.get())
+                    if self.hood.is_homed
+                    else self.hood.stop()
+                )
             )
         )
         self.intake.setDefaultCommand(
@@ -363,9 +416,11 @@ class RobotContainer:
           RB            = Home intake arm
           Start         = Auto-tune hood PID (Z-N relay method)
           Back          = Auto-tune intake arm PID (Z-N relay method)
-          Y             = Auto-tune shooter PID (Z-N relay method)
-          B             = Auto-tune kicker PID (Z-N relay method)
+          Y             = Calibrate shooter FF (voltage ramp)
+          B             = Calibrate kicker right FF (voltage ramp)
+          A             = Calibrate kicker left FF (voltage ramp)
         """
+
         # Left stick Y: hood position — center=min, full up=max
         # getLeftY() returns -1 (up) to +1 (down), clamp negative half only
         def _hood_from_stick():
@@ -373,49 +428,139 @@ class RobotContainer:
                 return
             raw = -self._joystick_1.getLeftY()  # 0..1 when pushed up
             t = max(0.0, raw)
-            pos = self.hood.min_rotations + t * (self.hood.max_rotations - self.hood.min_rotations)
+            pos = self.hood.min_rotations + t * (
+                self.hood.max_rotations - self.hood.min_rotations
+            )
             self.hood.set_target_position(pos)
 
         self.hood.setDefaultCommand(self.hood.run(_hood_from_stick))
 
-        # Right stick Y: intake arm — center=home (0), full down=min soft limit
-        # getLeftY() returns +1 when pushed down
+        # Right stick Y: intake arm — stick up=deployed (min), stick down=stowed (max)
         def _intake_from_stick():
             if not self.intake.homed:
                 return
-            raw = self._joystick_1.getRightY()  # 0..1 when pushed down
+            raw = -self._joystick_1.getRightY()  # 0..1 when pushed up
             t = max(0.0, raw)
-            pos = self.intake.max_rotations + t * (self.intake.min_rotations - self.intake.max_rotations)
+            if t < 0.05:
+                self.intake.hold()
+                return
+            pos = self.intake.max_rotations + t * (
+                self.intake.min_rotations - self.intake.max_rotations
+            )
             self.intake.set_arm_target_position(pos)
 
         self.intake.setDefaultCommand(self.intake.run(_intake_from_stick))
 
         # Homing
-        self._joystick_1.leftBumper().onTrue(HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS))
-        self._joystick_1.rightBumper().onTrue(HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS))
+        self._joystick_1.leftBumper().onTrue(
+            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
+        self._joystick_1.rightBumper().onTrue(
+            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
 
-        # Auto-tune
+        # Auto-tune (hood/intake use Z-N for position PID)
         self._joystick_1.start().onTrue(AutoTuneHoodCommand(self.hood))
         self._joystick_1.back().onTrue(AutoTuneIntakeCommand(self.intake))
-        self._joystick_1.y().onTrue(AutoTuneShooterCommand(self.shooter))
-        self._joystick_1.b().onTrue(AutoTuneKickerCommand(self.kicker))
-
-    def configureCompetitionBindings(self):
-        # Right trigger: Shoot at hub while aiming
-        self._joystick_1.rightTrigger().whileTrue(
-            ParallelCommandGroup(
-                # Aim robot at hub
-                self.drivetrain.apply_request(
-                    lambda: (
-                        self._snap_angle.with_target_direction(self.calculate_angle_to_hub())
-                        .with_velocity_x(joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed)
-                        .with_velocity_y(joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed)
-                    )
-                ),
-                # Shoot with ballistics calculation
-                ShootAtHub(self.shooter, self.kicker, self.indexer, self.hood, self.limelight, self.drivetrain),
+        # FF calibration (shooter/kicker use voltage ramp for feedforward)
+        self._joystick_1.y().onTrue(CalibrateFF(self.shooter, "CalFF Shooter"))
+        self._joystick_1.b().onTrue(
+            CalibrateFF(
+                self.kicker,
+                "CalFF Kicker Right",
+                set_output=self.kicker.set_right_duty_cycle,
+                get_speed=self.kicker.get_right_speed,
             )
         )
+        self._joystick_1.a().onTrue(
+            CalibrateFF(
+                self.kicker,
+                "CalFF Kicker Left",
+                set_output=self.kicker.set_left_duty_cycle,
+                get_speed=self.kicker.get_left_speed,
+            )
+        )
+
+    def configureCompetitionBindings(self):
+        # --- Swerve: sticks + auto-brake when idle ---
+        def _drive_or_brake():
+            vx = joystick_filter(-self._joystick_1.getLeftY())
+            vy = joystick_filter(-self._joystick_1.getLeftX())
+            vr = joystick_filter(-self._joystick_1.getRightX())
+            if vx == 0 and vy == 0 and vr == 0:
+                return self._brake
+            return (
+                self._drive.with_velocity_x(vx * self._max_speed)
+                .with_velocity_y(vy * self._max_speed)
+                .with_rotational_rate(vr * self._max_angular_rate)
+            )
+
+        self.drivetrain.setDefaultCommand(
+            self.drivetrain.apply_request(_drive_or_brake)
+        )
+
+        idle = swerve.requests.Idle()
+        Trigger(DriverStation.isDisabled).whileTrue(
+            self.drivetrain.apply_request(lambda: idle).ignoringDisable(True)
+        )
+
+        self.drivetrain.register_telemetry(
+            lambda state: self._logger.telemeterize(state)
+        )
+
+        # RT: Hold to aim at hub + shoot (auto RPM + hood from lookup table)
+        self._shoot_at_hub = HubShot(
+            self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain
+        )
+        self._joystick_1.rightTrigger().whileTrue(
+            ParallelCommandGroup(
+                self._shoot_at_hub,
+                self.drivetrain.apply_request(
+                    lambda: (
+                        self._snap_angle.with_target_direction(
+                            self.calculate_angle_to_hub()
+                        )
+                        .with_target_rate_feedforward(
+                            self.calculate_hub_lead_rate(self._shoot_at_hub.target_rpm)
+                        )
+                        .with_velocity_x(
+                            joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                        )
+                        .with_velocity_y(
+                            joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                        )
+                    )
+                ),
+            )
+        )
+
+        # LT: Hold to deploy intake arm + spin rollers
+        self._joystick_1.leftTrigger().whileTrue(
+            cmd.runEnd(
+                lambda: (
+                    self.intake.deploy(),
+                    self.intake.set_roller_duty_cycle(1.0),
+                ),
+                lambda: self.intake.set_roller_duty_cycle(0),
+                self.intake,
+            )
+        )
+
+        # Y: Stow intake arm
+        self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+
+        # RB: Home hood
+        self._joystick_1.rightBumper().onTrue(
+            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
+
+        # LB: Home intake arm
+        self._joystick_1.leftBumper().onTrue(
+            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
+
+        # Back: Re-home hood + intake
+        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
 
         # Climb function — disabled until PCM is on CAN bus
         # self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
@@ -423,8 +568,8 @@ class RobotContainer:
 
     def configureManualBindings(self):
         """
-        Manual driving + shooting without vision/auto-aim.
-        Use when limelight is unavailable or for practice.
+        Manual driving + shooting with vision-corrected aim at hub.
+        Hood and RPM set via NT / POV controls.
 
         Button layout:
           Left stick   = Translation (field-centric)
@@ -452,26 +597,33 @@ class RobotContainer:
                 .with_rotational_rate(vr * self._max_angular_rate)
             )
 
-        self.drivetrain.setDefaultCommand(self.drivetrain.apply_request(_drive_or_brake))
+        self.drivetrain.setDefaultCommand(
+            self.drivetrain.apply_request(_drive_or_brake)
+        )
 
         idle = swerve.requests.Idle()
-        Trigger(DriverStation.isDisabled).whileTrue(self.drivetrain.apply_request(lambda: idle).ignoringDisable(True))
+        Trigger(DriverStation.isDisabled).whileTrue(
+            self.drivetrain.apply_request(lambda: idle).ignoringDisable(True)
+        )
 
-        self.drivetrain.register_telemetry(lambda state: self._logger.telemeterize(state))
+        self.drivetrain.register_telemetry(
+            lambda state: self._logger.telemeterize(state)
+        )
 
         # --- Mechanism bindings ---
         table = NetworkTableInstance.getDefault().getTable("Manual")
 
-        hood_step = 0.005  # turns per loop (~0.25 turns/sec)
-        rpm_step = 5.0  # RPM per loop (~250 RPM/sec)
+        hood_step = 0.025  # turns per loop (~0.25 turns/sec)
+        rpm_step = 20.0  # RPM per loop (~250 RPM/sec)
 
         shooter_rpm_pub = table.getDoubleTopic("Shooter RPM").publish()
-        shooter_rpm_pub.set(4000.0)
-        shooter_rpm_sub = table.getDoubleTopic("Shooter RPM").subscribe(4000.0)
+        shooter_rpm_pub.set(2000.0)
+        shooter_rpm_sub = table.getDoubleTopic("Shooter RPM").subscribe(2000.0)
 
+        hood_mid = (self.hood.min_rotations + self.hood.max_rotations) / 2
         hood_pos_pub = table.getDoubleTopic("Hood Position").publish()
-        hood_pos_pub.set(2.0)
-        hood_pos_sub = table.getDoubleTopic("Hood Position").subscribe(2.0)
+        hood_pos_pub.set(hood_mid)
+        hood_pos_sub = table.getDoubleTopic("Hood Position").subscribe(hood_mid)
 
         # POV Up: Nudge hood position up (hold to repeat) — applied live
         def _hood_up():
@@ -479,7 +631,7 @@ class RobotContainer:
             hood_pos_pub.set(pos)
             self.hood.set_target_position(pos)
 
-        self._joystick_1.povUp().whileTrue(cmd.run(_hood_up))
+        self._joystick_1.povUp().whileTrue(cmd.run(_hood_up, self.hood))
 
         # POV Down: Nudge hood position down (hold to repeat) — applied live
         def _hood_down():
@@ -487,7 +639,7 @@ class RobotContainer:
             hood_pos_pub.set(pos)
             self.hood.set_target_position(pos)
 
-        self._joystick_1.povDown().whileTrue(cmd.run(_hood_down))
+        self._joystick_1.povDown().whileTrue(cmd.run(_hood_down, self.hood))
 
         # POV Right: Increase shooter RPM (hold to repeat)
         self._joystick_1.povRight().whileTrue(
@@ -496,12 +648,36 @@ class RobotContainer:
 
         # POV Left: Decrease shooter RPM (hold to repeat)
         self._joystick_1.povLeft().whileTrue(
-            cmd.run(lambda: shooter_rpm_pub.set(max(0, shooter_rpm_sub.get() - rpm_step)))
+            cmd.run(
+                lambda: shooter_rpm_pub.set(max(0, shooter_rpm_sub.get() - rpm_step))
+            )
         )
 
-        # RT: Hold to shoot — staged: shooter → kicker → conveyor (reads Manual/ NT values)
-        self._tune_shot = TuneShot(self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain)
-        self._joystick_1.rightTrigger().whileTrue(self._tune_shot)
+        # RT: Hold to aim at hub + shoot
+        self._tune_shot = TuneShot(
+            self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain
+        )
+        self._joystick_1.rightTrigger().whileTrue(
+            ParallelCommandGroup(
+                self._tune_shot,
+                self.drivetrain.apply_request(
+                    lambda: (
+                        self._snap_angle.with_target_direction(
+                            self.calculate_angle_to_hub()
+                        )
+                        .with_target_rate_feedforward(
+                            self.calculate_hub_lead_rate(shooter_rpm_sub.get())
+                        )
+                        .with_velocity_x(
+                            joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                        )
+                        .with_velocity_y(
+                            joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                        )
+                    )
+                ),
+            )
+        )
 
         # Start: Record shot data point (distance, hood_turns, RPM) to CSV + NT
         self._joystick_1.start().onTrue(cmd.runOnce(self._tune_shot.record_entry))
@@ -522,28 +698,61 @@ class RobotContainer:
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
 
         # RB: Home hood
-        self._joystick_1.rightBumper().onTrue(HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS))
+        self._joystick_1.rightBumper().onTrue(
+            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
 
         # LB: Home intake arm
-        self._joystick_1.leftBumper().onTrue(HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS))
+        self._joystick_1.leftBumper().onTrue(
+            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
+        )
+
+        # Back: Re-home hood + intake
+        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
+
+    def _get_hub_vector(self):
+        """Return (dx, dy) from robot to the correct alliance hub."""
+        from commands.shoot_at_hub import BLUE_HUB, RED_HUB
+
+        hub = (
+            RED_HUB
+            if DriverStation.getAlliance() == DriverStation.Alliance.kRed
+            else BLUE_HUB
+        )
+        robot_translation = self.drivetrain.get_state().pose.translation()
+        return hub.X() - robot_translation.X(), hub.Y() - robot_translation.Y()
 
     def calculate_angle_to_hub(self) -> Rotation2d:
-        """
-        Calculate the angle the robot should face to aim at the hub.
-
-        :return: Rotation2d representing the angle to the hub
-        """
-        import math
-
-        from commands.shoot_at_hub import HUB_POSITION
-
-        robot_pose = self.drivetrain.get_state().pose
-        robot_translation = robot_pose.translation()
-
-        dx = HUB_POSITION.X() - robot_translation.X()
-        dy = HUB_POSITION.Y() - robot_translation.Y()
-
+        """Calculate the angle the robot should face to aim at the hub."""
+        dx, dy = self._get_hub_vector()
         return Rotation2d(math.atan2(dy, dx))
+
+    def calculate_hub_lead_rate(self, target_rpm: float) -> float:
+        """Rotational rate feedforward (rad/s) to lead the target based on
+        chassis velocity and estimated ball flight time."""
+
+        dx, dy = self._get_hub_vector()
+        dist_sq = dx * dx + dy * dy
+        distance = math.sqrt(dist_sq)
+
+        if distance < 0.5:
+            return 0.0
+
+        # Ball exit velocity: 4" wheel, 1:1.3 gear ratio, slip factor
+        flywheel_rpm = target_rpm * _GEAR_RATIO
+        surface_speed = flywheel_rpm * _FLYWHEEL_CIRCUMFERENCE / 60.0
+        exit_velocity = surface_speed * _SLIP_FACTOR
+
+        if exit_velocity < 1.0:
+            return 0.0
+
+        flight_time = distance / exit_velocity
+
+        # d/dt atan2(dy, dx) = (dx * vy - dy * vx) / (dx² + dy²)
+        speeds = self.drivetrain.get_state().speeds
+        angular_rate = (dx * speeds.vy - dy * speeds.vx) / dist_sq
+
+        return angular_rate * flight_time
 
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""

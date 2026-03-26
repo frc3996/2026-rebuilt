@@ -14,7 +14,7 @@ BLUE_HUB = Translation2d(HUB_X_M, HUB_Y_M)
 RED_HUB = Translation2d(FIELD_LENGTH_M - HUB_X_M, HUB_Y_M)
 
 
-class ShootAtHub(Command):
+class HubShot(Command):
     """
     Command that coordinates shooter, kicker, conveyor, and hood to shoot at the hub.
 
@@ -22,35 +22,32 @@ class ShootAtHub(Command):
     (shooter → kicker → conveyor), and adjusts hood position.
     """
 
-    SHOOTER_TARGET_RPM = 4000
-    SHOOTER_TOLERANCE_RPM = 200
-    KICKER_TOLERANCE_RPM = 500
+    SHOOTER_TOLERANCE_RPM = 75
+    KICKER_TOLERANCE_RPM = 150
 
     # Lookup table: (distance_meters, hood_motor_turns, shooter_rpm)
     SHOT_TABLE: ClassVar[list[tuple[float, float, int]]] = [
-        (1.0, 1.0, 3500),  # Close shot
-        (2.0, 2.0, 3800),  # Medium shot
-        (3.0, 3.0, 4200),  # Far shot
-        (4.0, 3.5, 4500),  # Very far shot
-        (5.0, 4.0, 4800),  # Max range shot
+        (1.94, 0.1, 2040),
+        (1.96, 0.1, 2080),
+        (2.48, 0.1, 2160),
+        (3.25, 0.1, 2360),
+        (3.67, 0.1, 2420),
     ]
 
-    def __init__(self, shooter, kicker, indexer, hood, vision, drivetrain):
+    def __init__(self, shooter, kicker, indexer, hood, drivetrain):
         super().__init__()
         self.shooter = shooter
         self.kicker = kicker
         self.indexer = indexer
         self.hood = hood
-        self.vision = vision
         self.drivetrain = drivetrain
 
         self.addRequirements(shooter, kicker, indexer, hood)
-        # vision and drivetrain are intentionally NOT requirements — the parallel
-        # snap-angle command in robotcontainer owns the drivetrain while this runs.
 
-        self.target_rpm = self.SHOOTER_TARGET_RPM
+        self.target_rpm = 0.0
         self.target_hood_turns = 0.0
-        self.feeding = False
+        # 0 = spinning up shooter, 1 = spinning up kicker, 2 = feeding
+        self._stage = 0
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Shoot")
         self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
@@ -61,29 +58,37 @@ class ShootAtHub(Command):
         self._feeding_pub = table.getBooleanTopic("Feeding").publish()
 
     def initialize(self):
-        self.feeding = False
+        self._stage = 0
 
     def execute(self):
-        distance = self.calculate_distance_to_hub()
+        distance = self._get_hub_distance()
         self.target_rpm, self.target_hood_turns = self.compute_ballistics(distance)
 
         self.shooter.set_target_speed(self.target_rpm)
         self.hood.set_target_position(self.target_hood_turns)
 
         current_rpm = self.shooter.get_current_speed()
-        shooter_ready = abs(current_rpm - self.target_rpm) < self.SHOOTER_TOLERANCE_RPM
+        shooter_ready = (
+            current_rpm > self.target_rpm * 0.9
+            and abs(current_rpm - self.target_rpm) < self.SHOOTER_TOLERANCE_RPM
+        )
 
-        # Stage 1: kicker spins up once shooter is at speed
-        if shooter_ready:
+        # Stage 0 → 1: shooter at speed, start kicker
+        if self._stage == 0 and shooter_ready:
+            self._stage = 1
+
+        # Stage 1 → 2: kicker at speed, start feeding
+        if self._stage >= 1:
             self.kicker.set_target_speed(self.target_rpm)
+            kicker_speed = self.kicker.get_current_speed()
+            kicker_ready = abs(kicker_speed - self.target_rpm) < self.KICKER_TOLERANCE_RPM
+            if self._stage == 1 and kicker_ready:
+                self._stage = 2
         else:
             self.kicker.stop()
 
-        # Stage 2: conveyor feeds once kicker is at speed
-        kicker_ready = abs(self.kicker.get_current_speed() - self.target_rpm) < self.KICKER_TOLERANCE_RPM
-        self.feeding = shooter_ready and kicker_ready
-        if self.feeding:
-            self.indexer.set_target_output(0.5)
+        if self._stage >= 2:
+            self.indexer.set_target_output(1.0)
         else:
             self.indexer.stop()
 
@@ -92,7 +97,7 @@ class ShootAtHub(Command):
         self._current_rpm_pub.set(current_rpm)
         self._rpm_error_pub.set(abs(current_rpm - self.target_rpm))
         self._target_hood_pub.set(self.target_hood_turns)
-        self._feeding_pub.set(self.feeding)
+        self._feeding_pub.set(self._stage >= 2)
 
     def end(self, interrupted: bool):
         self.shooter.stop()
@@ -100,15 +105,16 @@ class ShootAtHub(Command):
         self.indexer.stop()
         self.hood.stow()
         self._feeding_pub.set(False)
+        self._stage = 0
 
     def isFinished(self) -> bool:
         return False
 
-    def calculate_distance_to_hub(self) -> float:
-        robot_pose = self.drivetrain.get_state().pose
+    def _get_hub_distance(self) -> float:
+        robot_pos = self.drivetrain.get_state().pose.translation()
         alliance = DriverStation.getAlliance()
         hub = RED_HUB if alliance == DriverStation.Alliance.kRed else BLUE_HUB
-        return robot_pose.translation().distance(hub)
+        return robot_pos.distance(hub)
 
     def compute_ballistics(self, distance: float) -> tuple[float, float]:
         if distance <= self.SHOT_TABLE[0][0]:

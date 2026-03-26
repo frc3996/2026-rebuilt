@@ -8,7 +8,7 @@ from wpilib import DataLogManager
 from modules.limelight import LimelightHelpers, PoseEstimate
 from subsystems.command_swerve_drivetrain import CommandSwerveDrivetrain
 
-LIMELIGHT_CAMERA_NAME = "limelight-back"
+LIMELIGHT_CAMERA_NAME = "limelight-front"
 VISION_MAX_TAG_DISTANCE = 4.125  # meters — reject estimates beyond this
 VISION_MAX_ANGULAR_VELOCITY = 720  # deg/s — reject estimates during fast rotation
 
@@ -47,9 +47,10 @@ class VisionSubsystem(Subsystem):
                 self._camera, state.pose.rotation().degrees(), 0, 0, 0, 0, 0
             )
 
-            use_mt2 = self._use_mt2_sub.get()
-            if use_mt2:
-                estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(self._camera)
+            if self._use_megatag2:
+                estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
+                    self._camera
+                )
             else:
                 estimate = LimelightHelpers.get_botpose_estimate_wpiblue(self._camera)
 
@@ -63,7 +64,7 @@ class VisionSubsystem(Subsystem):
 
             self._too_far_pub.set(False)
 
-            if not use_mt2:
+            if not self._use_megatag2:
                 self._swerve.seed_field_centric(estimate.pose.rotation())
 
             self._swerve.add_vision_measurement(
@@ -86,7 +87,9 @@ class VisionSubsystem(Subsystem):
         if estimate.tag_count == 0:
             return 0.5, 0.5, 0.5
 
-        avg_dist = sum(f.dist_to_camera for f in estimate.raw_fiducials) / estimate.tag_count
+        avg_dist = (
+            sum(f.dist_to_camera for f in estimate.raw_fiducials) / estimate.tag_count
+        )
 
         factor = 0.9 + (avg_dist**2 / 30)
 

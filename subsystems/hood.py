@@ -18,7 +18,7 @@ POSITION_STALL_VELOCITY = 1.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
 # Position constants
-STOW_POSITION = 0.5  # Motor turns — min soft limit, clear of hard stop
+STOW_POSITION = 0.1  # Motor turns — min soft limit, clear of hard stop
 
 # PID defaults (slot 0 — position)
 KP = 0.092
@@ -114,7 +114,9 @@ class HoodSubSystem(Subsystem):
         """Drive hood to a position in motor turns (requires homing)."""
         if not self.is_homed:
             return
-        target_position = max(self.min_rotations, min(target_position, self.max_rotations))
+        target_position = max(
+            self.min_rotations, min(target_position, self.max_rotations)
+        )
         self._target_position = target_position
         self._position_active = True
         self._closed_loop.setReference(

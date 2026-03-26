@@ -18,14 +18,13 @@ POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
 # Position constants
-DEPLOY_POSITION = -2.0  # Slightly raised from hard stop (home position)
+DEPLOY_POSITION = -8.0  # Slightly raised from hard stop (home position)
 STOW_POSITION = -38.0  # Retracted/stowed position in motor turns
 
 # PID defaults (slot 0 — position)
 ARM_KP = 0.092
 ARM_KI = 0.0
 ARM_KD = 0.002
-
 
 
 class IntakeSubSystem(Subsystem):
@@ -38,7 +37,9 @@ class IntakeSubSystem(Subsystem):
 
     def __init__(self) -> None:
         super().__init__()
-        self._arm_motor = rev.SparkMax(CANIds.INTAKE_ARM, rev.SparkMax.MotorType.kBrushless)
+        self._arm_motor = rev.SparkMax(
+            CANIds.INTAKE_ARM, rev.SparkMax.MotorType.kBrushless
+        )
         self._arm_encoder = self._arm_motor.getEncoder()
         self._arm_closed_loop = self._arm_motor.getClosedLoopController()
         self.homed: bool = False
@@ -49,7 +50,9 @@ class IntakeSubSystem(Subsystem):
         self.min_rotations: float = -38.0
         self.max_rotations: float = -2.0  # clear of deployed hard stop
 
-        self._roller_motor = rev.SparkMax(CANIds.INTAKE_ROLLER, rev.SparkMax.MotorType.kBrushless)
+        self._roller_motor = rev.SparkMax(
+            CANIds.INTAKE_ROLLER, rev.SparkMax.MotorType.kBrushless
+        )
         self._roller_encoder = self._roller_motor.getEncoder()
         self._roller_closed_loop = self._roller_motor.getClosedLoopController()
 
@@ -60,7 +63,9 @@ class IntakeSubSystem(Subsystem):
         self._arm_config.smartCurrentLimit(15)
         self._arm_config.secondaryCurrentLimit(20)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
-        self._arm_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
+        self._arm_config.closedLoop.setFeedbackSensor(
+            rev.FeedbackSensor.kPrimaryEncoder
+        )
         self._arm_config.closedLoop.P(ARM_KP, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.I(ARM_KI, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.D(ARM_KD, rev.ClosedLoopSlot.kSlot0)
@@ -85,7 +90,9 @@ class IntakeSubSystem(Subsystem):
         roller_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.I(0, rev.ClosedLoopSlot.kSlot0)
         roller_config.closedLoop.D(0, rev.ClosedLoopSlot.kSlot0)
-        roller_config.closedLoop.velocityFF(1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0)
+        roller_config.closedLoop.velocityFF(
+            1.0 / NEO_FREE_SPEED_RPM, rev.ClosedLoopSlot.kSlot0
+        )
         roller_config.closedLoop.outputRange(0, 1, rev.ClosedLoopSlot.kSlot0)
         self._roller_motor.configure(
             roller_config,
@@ -108,7 +115,9 @@ class IntakeSubSystem(Subsystem):
         self._arm_stall_cycle_pub = table.getIntegerTopic("Arm Stall Cycle").publish()
         self._arm_stall_count_pub = table.getIntegerTopic("Arm Stall Count").publish()
         self._arm_limits_set_pub = table.getBooleanTopic("Arm Limits Set").publish()
-        self._roller_velocity_pub = table.getDoubleTopic("Roller Velocity RPM").publish()
+        self._roller_velocity_pub = table.getDoubleTopic(
+            "Roller Velocity RPM"
+        ).publish()
         self._roller_target_pub = table.getDoubleTopic("Roller Target RPM").publish()
         self._roller_amps_pub = table.getDoubleTopic("Roller Amps").publish()
 
@@ -151,7 +160,9 @@ class IntakeSubSystem(Subsystem):
         """Drive arm to a position in motor turns (requires homing)."""
         if not self.homed:
             return
-        target_position = max(self.min_rotations, min(target_position, self.max_rotations))
+        target_position = max(
+            self.min_rotations, min(target_position, self.max_rotations)
+        )
         self._arm_target = target_position
         self._arm_position_active = True
         self._arm_closed_loop.setReference(
@@ -244,7 +255,10 @@ class IntakeSubSystem(Subsystem):
 
         # Stall detection during position control
         if self._arm_position_active:
-            if arm_current > POSITION_STALL_CURRENT and arm_velocity < POSITION_STALL_VELOCITY:
+            if (
+                arm_current > POSITION_STALL_CURRENT
+                and arm_velocity < POSITION_STALL_VELOCITY
+            ):
                 self._stall_cycle += 1
             else:
                 self._stall_cycle = 0
