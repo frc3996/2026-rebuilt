@@ -21,7 +21,7 @@ POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 STOW_POSITION = 0.1  # Motor turns — min soft limit, clear of hard stop
 
 # PID defaults (slot 0 — position)
-KP = 0.092
+KP = 0.10
 KI = 0.0
 KD = 0.0001
 
@@ -44,12 +44,12 @@ class HoodSubSystem(Subsystem):
         self._soft_limits_enabled: bool = True
 
         # Rotation limits — set via set_min_limit / set_max_limit
-        self.min_rotations: float = 0.5
+        self.min_rotations: float = 0.1
         self.max_rotations: float = 6.4
 
         self._config = rev.SparkBaseConfig()
         self._config.inverted(True)
-        self._config.voltageCompensation(11.0)
+        self._config.voltageCompensation(10)
         self._config.smartCurrentLimit(15)
         self._config.secondaryCurrentLimit(20)
         self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)

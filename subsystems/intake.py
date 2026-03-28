@@ -59,7 +59,7 @@ class IntakeSubSystem(Subsystem):
         # Arm config — position controlled, brake mode
         self._arm_config = rev.SparkBaseConfig()
         self._arm_config.inverted(True)  # positive = toward stow (retract)
-        self._arm_config.voltageCompensation(11.0)
+        self._arm_config.voltageCompensation(10)
         self._arm_config.smartCurrentLimit(15)
         self._arm_config.secondaryCurrentLimit(20)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
@@ -82,7 +82,7 @@ class IntakeSubSystem(Subsystem):
 
         # Roller config — velocity controlled, coast mode
         roller_config = rev.SparkBaseConfig()
-        roller_config.voltageCompensation(11.0)
+        roller_config.voltageCompensation(10)
         roller_config.smartCurrentLimit(50)
         roller_config.secondaryCurrentLimit(60)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

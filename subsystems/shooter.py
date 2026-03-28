@@ -33,7 +33,7 @@ class ShooterSubSystem(Subsystem):
         self._follower = rev.SparkMax(CANIds.SHOOTER_FOLLOWER, rev.SparkMax.MotorType.kBrushless)
 
         self._config = rev.SparkBaseConfig()
-        self._config.voltageCompensation(11.0)
+        self._config.voltageCompensation(10)
         self._config.smartCurrentLimit(50)
         self._config.secondaryCurrentLimit(60)
         self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
@@ -67,7 +67,7 @@ class ShooterSubSystem(Subsystem):
         )
 
         follower_config = rev.SparkBaseConfig()
-        follower_config.voltageCompensation(11.0)
+        follower_config.voltageCompensation(10)
         follower_config.smartCurrentLimit(50)
         follower_config.secondaryCurrentLimit(60)
         follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

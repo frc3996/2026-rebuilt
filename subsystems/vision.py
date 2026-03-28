@@ -42,12 +42,11 @@ class VisionSubsystem(Subsystem):
         try:
             state = self._swerve.get_state_copy()
 
-            # Provide robot orientation for MegaTag2 — no_flush avoids blocking NT round-trip
-            LimelightHelpers.set_robot_orientation_no_flush(
-                self._camera, state.pose.rotation().degrees(), 0, 0, 0, 0, 0
-            )
-
             if self._use_megatag2:
+                # MegaTag2 needs odometry rotation fed to the Limelight
+                LimelightHelpers.set_robot_orientation_no_flush(
+                    self._camera, state.pose.rotation().degrees(), 0, 0, 0, 0, 0
+                )
                 estimate = LimelightHelpers.get_botpose_estimate_wpiblue_megatag2(
                     self._camera
                 )
@@ -63,9 +62,6 @@ class VisionSubsystem(Subsystem):
                 return
 
             self._too_far_pub.set(False)
-
-            if not self._use_megatag2:
-                self._swerve.seed_field_centric(estimate.pose.rotation())
 
             self._swerve.add_vision_measurement(
                 estimate.pose,

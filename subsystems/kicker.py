@@ -63,7 +63,7 @@ class KickerSubSystem(Subsystem):
         self._left_closed_loop = self._left_motor.getClosedLoopController()
 
         self._right_config = rev.SparkBaseConfig()
-        self._right_config.voltageCompensation(11.0)
+        self._right_config.voltageCompensation(10)
         self._right_config.smartCurrentLimit(50)
         self._right_config.secondaryCurrentLimit(60)
         self._right_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
@@ -76,7 +76,7 @@ class KickerSubSystem(Subsystem):
         )
 
         self._left_config = rev.SparkBaseConfig()
-        self._left_config.voltageCompensation(11.0)
+        self._left_config.voltageCompensation(10)
         self._left_config.smartCurrentLimit(50)
         self._left_config.secondaryCurrentLimit(60)
         self._left_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

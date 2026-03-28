@@ -4,16 +4,16 @@ from pathlib import Path
 import ntcore
 import rev
 from commands2 import Command
-from wpilib import DriverStation
+from wpilib import DriverStation, Timer
 
-from commands.shoot_at_hub import BLUE_HUB, RED_HUB
+from commands.hub_shot import BLUE_HUB, RED_HUB
 from subsystems.hood import HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import (
     KP_HIGH,
     KP_LOW,
-    KP_MID,
+     KP_MID,
     ShooterSubSystem,
 )
 
@@ -52,7 +52,7 @@ class TuneShot(Command):
 
         # Tunable inputs (shared with configureManualBindings POV controls)
         self._rpm_sub = table.getDoubleTopic("Shooter RPM").subscribe(2000.0)
-        self._hood_sub = table.getDoubleTopic("Hood Position").subscribe(3.45)
+        self._hood_sub = table.getDoubleTopic("Hood Position").subscribe(0.1)
 
         # Telemetry
         self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
@@ -65,8 +65,7 @@ class TuneShot(Command):
         self._entries_pub = table.getStringArrayTopic("Recorded Entries").publish()
         self._entry_count_pub = table.getIntegerTopic("Entry Count").publish()
         self._entries: list[tuple[float, float, float]] = []
-        # 0 = spinning up shooter, 1 = spinning up kicker, 2 = feeding
-        self._stage: int = 0
+        self._feed_timer = Timer()
 
         # NT-tunable P gains per slot (shooter + kicker share same slots)
         pid_table = ntcore.NetworkTableInstance.getDefault().getTable("PID Tuning")
@@ -105,8 +104,10 @@ class TuneShot(Command):
         self._last_kicker_r_p = [RIGHT_KP_LOW, RIGHT_KP_MID, RIGHT_KP_HIGH]
         self._last_kicker_l_p = [LEFT_KP_LOW, LEFT_KP_MID, LEFT_KP_HIGH]
 
+    FEED_DELAY_S = 2.0
+
     def initialize(self) -> None:
-        self._stage = 0
+        self._feed_timer.restart()
 
     def execute(self) -> None:
         self._check_pid_updates()
@@ -116,36 +117,19 @@ class TuneShot(Command):
 
         self.hood.set_target_position(hood_pos)
         self.shooter.set_target_speed(target_rpm)
+        self.kicker.set_target_speed(target_rpm)
 
-        current_rpm = self.shooter.get_current_speed()
-        shooter_ready = (
-            current_rpm > target_rpm * 0.9
-            and abs(current_rpm - target_rpm) < SHOOTER_TOLERANCE_RPM
-        )
-
-        # Stage 0 → 1: shooter at speed, start kicker
-        if self._stage == 0 and shooter_ready:
-            self._stage = 1
-
-        # Stage 1 → 2: kicker at speed, start feeding
-        if self._stage >= 1:
-            self.kicker.set_target_speed(target_rpm)
-            kicker_speed = self.kicker.get_current_speed()
-            kicker_ready = abs(kicker_speed - target_rpm) < KICKER_TOLERANCE_RPM
-            if self._stage == 1 and kicker_ready:
-                self._stage = 2
-        else:
-            self.kicker.stop()
-
-        if self._stage >= 2:
+        feeding = self._feed_timer.hasElapsed(self.FEED_DELAY_S)
+        if feeding:
             self.indexer.set_target_output(1.0)
         else:
             self.indexer.stop()
 
+        current_rpm = self.shooter.get_current_speed()
         distance = self._get_hub_distance()
         self._distance_pub.set(distance)
-        self._feeding_pub.set(self._stage >= 2)
-        self._shooter_ready_pub.set(shooter_ready)
+        self._feeding_pub.set(feeding)
+        self._shooter_ready_pub.set(abs(current_rpm - target_rpm) < SHOOTER_TOLERANCE_RPM)
         self._current_rpm_pub.set(current_rpm)
         self._rpm_error_pub.set(abs(current_rpm - target_rpm))
 
@@ -161,7 +145,6 @@ class TuneShot(Command):
         self.hood.stow()
         self._feeding_pub.set(False)
         self._shooter_ready_pub.set(False)
-        self._stage = 0
 
     def isFinished(self) -> bool:
         return False

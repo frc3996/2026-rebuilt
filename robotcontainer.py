@@ -4,6 +4,8 @@
 # the WPILib BSD license file in the root directory of this project.
 #
 
+import math
+
 import commands2
 from commands2 import ParallelCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
@@ -25,7 +27,7 @@ from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
 from commands.safe_retract_intake import SafeRetractIntake
-from commands.shoot_at_hub import HubShot
+from commands.hub_shot import HubShot
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
@@ -36,14 +38,11 @@ from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import LIMELIGHT_CAMERA_NAME, VisionSubsystem
 from telemetry import Telemetry
 
-
-import math
-
 # Flywheel speed compensation constants
 _FLYWHEEL_DIAMETER_M = 4 * 0.0254  # 4 inches
 _FLYWHEEL_CIRCUMFERENCE = math.pi * _FLYWHEEL_DIAMETER_M
 _GEAR_RATIO = 1.3  # motor:flywheel
-_SLIP_FACTOR = 0.85  # high — kicker pre-accelerates the ball
+_SLIP_FACTOR = 0.5  # high — kicker pre-accelerates the ball
 
 
 def joystick_filter(value):
@@ -98,6 +97,12 @@ class RobotContainer:
 
         self._logger = Telemetry(self._max_speed)
 
+        # NT-tunable slip factor for lead compensation
+        shoot_table = NetworkTableInstance.getDefault().getTable("Shoot")
+        self._slip_factor_pub = shoot_table.getDoubleTopic("Slip Factor").publish()
+        self._slip_factor_pub.set(_SLIP_FACTOR)
+        self._slip_factor_sub = shoot_table.getDoubleTopic("Slip Factor").subscribe(_SLIP_FACTOR)
+
         self._joystick_1 = CommandXboxController(0)
 
         self.drivetrain = TunerConstants.create_drivetrain()
@@ -133,8 +138,21 @@ class RobotContainer:
         # self.configureSwerveButtonBindings()
         # self.configureHardwareTestBindings()
         # self.configureTuningTestBindings()
-        self.configureManualBindings()
-        # self.configureCompetitionBindings()
+        # self.configureManualBindings()
+        self.configureCompetitionBindings()
+
+    def _drive_or_brake(self):
+        """Swerve request: drive from joystick input, or brake when sticks are idle."""
+        vx = joystick_filter(-self._joystick_1.getLeftY())
+        vy = joystick_filter(-self._joystick_1.getLeftX())
+        vr = joystick_filter(-self._joystick_1.getRightX())
+        if vx == 0 and vy == 0 and vr == 0:
+            return self._brake
+        return (
+            self._drive.with_velocity_x(vx * self._max_speed)
+            .with_velocity_y(vy * self._max_speed)
+            .with_rotational_rate(vr * self._max_angular_rate)
+        )
 
     def configureSwerveButtonBindings(self) -> None:
         """
@@ -143,24 +161,8 @@ class RobotContainer:
         and then passing it to a JoystickButton.
         """
 
-        # Note that X is defined as forward according to WPILib convention,
-        # and Y is defined as to the left according to WPILib convention.
         self.drivetrain.setDefaultCommand(
-            # Drivetrain will execute this command periodically
-            self.drivetrain.apply_request(
-                lambda: (
-                    self._drive.with_velocity_x(
-                        joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
-                    )  # Drive forward with negative Y (forward)
-                    .with_velocity_y(
-                        joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
-                    )  # Drive left with negative X (left)
-                    .with_rotational_rate(
-                        joystick_filter(-self._joystick_1.getRightX())
-                        * self._max_angular_rate
-                    )  # Drive counterclockwise with negative X (left)
-                )
-            )
+            self.drivetrain.apply_request(self._drive_or_brake)
         )
 
         # Idle while the robot is disabled. This ensures the configured
@@ -482,21 +484,8 @@ class RobotContainer:
         )
 
     def configureCompetitionBindings(self):
-        # --- Swerve: sticks + auto-brake when idle ---
-        def _drive_or_brake():
-            vx = joystick_filter(-self._joystick_1.getLeftY())
-            vy = joystick_filter(-self._joystick_1.getLeftX())
-            vr = joystick_filter(-self._joystick_1.getRightX())
-            if vx == 0 and vy == 0 and vr == 0:
-                return self._brake
-            return (
-                self._drive.with_velocity_x(vx * self._max_speed)
-                .with_velocity_y(vy * self._max_speed)
-                .with_rotational_rate(vr * self._max_angular_rate)
-            )
-
         self.drivetrain.setDefaultCommand(
-            self.drivetrain.apply_request(_drive_or_brake)
+            self.drivetrain.apply_request(self._drive_or_brake)
         )
 
         idle = swerve.requests.Idle()
@@ -512,25 +501,24 @@ class RobotContainer:
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain
         )
+        def _hub_shot_request():
+            aim, vdist, ff = self.calculate_virtual_goal(self._shoot_at_hub.target_rpm)
+            self._shoot_at_hub.virtual_distance = vdist
+            return (
+                self._snap_angle.with_target_direction(aim)
+                .with_target_rate_feedforward(ff)
+                .with_velocity_x(
+                    joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                )
+                .with_velocity_y(
+                    joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                )
+            )
+
         self._joystick_1.rightTrigger().whileTrue(
             ParallelCommandGroup(
                 self._shoot_at_hub,
-                self.drivetrain.apply_request(
-                    lambda: (
-                        self._snap_angle.with_target_direction(
-                            self.calculate_angle_to_hub()
-                        )
-                        .with_target_rate_feedforward(
-                            self.calculate_hub_lead_rate(self._shoot_at_hub.target_rpm)
-                        )
-                        .with_velocity_x(
-                            joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
-                        )
-                        .with_velocity_y(
-                            joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
-                        )
-                    )
-                ),
+                self.drivetrain.apply_request(_hub_shot_request),
             )
         )
 
@@ -584,21 +572,8 @@ class RobotContainer:
         Auto-brake when sticks are idle.
         """
 
-        # --- Swerve: sticks + auto-brake when idle ---
-        def _drive_or_brake():
-            vx = joystick_filter(-self._joystick_1.getLeftY())
-            vy = joystick_filter(-self._joystick_1.getLeftX())
-            vr = joystick_filter(-self._joystick_1.getRightX())
-            if vx == 0 and vy == 0 and vr == 0:
-                return self._brake
-            return (
-                self._drive.with_velocity_x(vx * self._max_speed)
-                .with_velocity_y(vy * self._max_speed)
-                .with_rotational_rate(vr * self._max_angular_rate)
-            )
-
         self.drivetrain.setDefaultCommand(
-            self.drivetrain.apply_request(_drive_or_brake)
+            self.drivetrain.apply_request(self._drive_or_brake)
         )
 
         idle = swerve.requests.Idle()
@@ -657,25 +632,24 @@ class RobotContainer:
         self._tune_shot = TuneShot(
             self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain
         )
+
+        def _tune_shot_request():
+            aim, _, ff = self.calculate_virtual_goal(shooter_rpm_sub.get())
+            return (
+                self._snap_angle.with_target_direction(aim)
+                .with_target_rate_feedforward(ff)
+                .with_velocity_x(
+                    joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                )
+                .with_velocity_y(
+                    joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                )
+            )
+
         self._joystick_1.rightTrigger().whileTrue(
             ParallelCommandGroup(
                 self._tune_shot,
-                self.drivetrain.apply_request(
-                    lambda: (
-                        self._snap_angle.with_target_direction(
-                            self.calculate_angle_to_hub()
-                        )
-                        .with_target_rate_feedforward(
-                            self.calculate_hub_lead_rate(shooter_rpm_sub.get())
-                        )
-                        .with_velocity_x(
-                            joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
-                        )
-                        .with_velocity_y(
-                            joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
-                        )
-                    )
-                ),
+                self.drivetrain.apply_request(_tune_shot_request),
             )
         )
 
@@ -710,49 +684,54 @@ class RobotContainer:
         # Back: Re-home hood + intake
         self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
 
-    def _get_hub_vector(self):
-        """Return (dx, dy) from robot to the correct alliance hub."""
-        from commands.shoot_at_hub import BLUE_HUB, RED_HUB
+    def _get_hub(self):
+        """Return the correct alliance hub Translation2d."""
+        from commands.hub_shot import BLUE_HUB, RED_HUB
 
-        hub = (
+        return (
             RED_HUB
             if DriverStation.getAlliance() == DriverStation.Alliance.kRed
             else BLUE_HUB
         )
-        robot_translation = self.drivetrain.get_state().pose.translation()
-        return hub.X() - robot_translation.X(), hub.Y() - robot_translation.Y()
 
-    def calculate_angle_to_hub(self) -> Rotation2d:
-        """Calculate the angle the robot should face to aim at the hub."""
-        dx, dy = self._get_hub_vector()
-        return Rotation2d(math.atan2(dy, dx))
+    def calculate_virtual_goal(self, target_rpm: float) -> tuple[Rotation2d, float, float]:
+        """Compute virtual goal accounting for robot velocity during ball flight.
 
-    def calculate_hub_lead_rate(self, target_rpm: float) -> float:
-        """Rotational rate feedforward (rad/s) to lead the target based on
-        chassis velocity and estimated ball flight time."""
+        Returns (aim_direction, virtual_distance, angular_rate_feedforward).
+        """
+        hub = self._get_hub()
+        state = self.drivetrain.get_state()
+        robot = state.pose.translation()
+        speeds = state.speeds
 
-        dx, dy = self._get_hub_vector()
-        dist_sq = dx * dx + dy * dy
-        distance = math.sqrt(dist_sq)
+        dx = hub.X() - robot.X()
+        dy = hub.Y() - robot.Y()
+        distance = math.hypot(dx, dy)
 
         if distance < 0.5:
-            return 0.0
+            return Rotation2d(math.atan2(dy, dx)), distance, 0.0
 
-        # Ball exit velocity: 4" wheel, 1:1.3 gear ratio, slip factor
+        # Ball exit velocity
         flywheel_rpm = target_rpm * _GEAR_RATIO
         surface_speed = flywheel_rpm * _FLYWHEEL_CIRCUMFERENCE / 60.0
-        exit_velocity = surface_speed * _SLIP_FACTOR
+        exit_velocity = surface_speed * self._slip_factor_sub.get()
 
         if exit_velocity < 1.0:
-            return 0.0
+            return Rotation2d(math.atan2(dy, dx)), distance, 0.0
 
         flight_time = distance / exit_velocity
 
-        # d/dt atan2(dy, dx) = (dx * vy - dy * vx) / (dx² + dy²)
-        speeds = self.drivetrain.get_state().speeds
+        # Virtual goal: shift hub backward by robot velocity * flight time
+        vdx = dx - speeds.vx * flight_time
+        vdy = dy - speeds.vy * flight_time
+        virtual_distance = math.hypot(vdx, vdy)
+        aim_direction = Rotation2d(math.atan2(vdy, vdx))
+
+        # Angular rate feedforward: d/dt atan2(dy, dx)
+        dist_sq = dx * dx + dy * dy
         angular_rate = (dx * speeds.vy - dy * speeds.vx) / dist_sq
 
-        return angular_rate * flight_time
+        return aim_direction, virtual_distance, angular_rate
 
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""

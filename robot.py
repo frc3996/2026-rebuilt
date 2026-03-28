@@ -53,7 +53,7 @@ class MyRobot(commands2.TimedCommandRobot):
 
     def disabledInit(self) -> None:
         """This function is called once each time the robot enters Disabled mode."""
-        self.container.limelight.set_throttle(200)
+        self.container.limelight.set_throttle(0)
         self.container.limelight._use_megatag2 = False
 
     def disabledPeriodic(self) -> None:
