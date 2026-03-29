@@ -195,6 +195,9 @@ class HubShot(Command):
         self._rpm_error_pub = table.getDoubleTopic("RPM Error").publish()
         self._target_hood_pub = table.getDoubleTopic("Target Hood Turns").publish()
         self._feeding_pub = table.getBooleanTopic("Feeding").publish()
+        self._kicker_full_pub = table.getBooleanTopic("Kicker Full Speed").publish()
+        self._kicker_full_pub.set(True)
+        self._kicker_full_sub = table.getBooleanTopic("Kicker Full Speed").subscribe(False)
 
     FEED_DELAY_S = 2.0
 
@@ -208,7 +211,10 @@ class HubShot(Command):
 
         self.shooter.set_target_speed(target_rpm)
         self.hood.set_target_position(target_hood)
-        self.kicker.set_target_speed(target_rpm)
+        if self._kicker_full_sub.get():
+            self.kicker.set_duty_cycle(1.0)
+        else:
+            self.kicker.set_target_speed(target_rpm)
 
         if self._feed_timer.hasElapsed(self.FEED_DELAY_S):
             self.indexer.set_target_output(1.0)
