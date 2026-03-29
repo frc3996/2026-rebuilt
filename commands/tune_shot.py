@@ -45,7 +45,7 @@ class TuneShot(Command):
         self.kicker = kicker
         self.indexer = indexer
         self.hood = hood
-        self.drivetrain = drivetrain
+        self._drivetrain = drivetrain
         self.addRequirements(shooter, kicker, indexer, hood)
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Manual")
@@ -183,8 +183,7 @@ class TuneShot(Command):
                 self._last_kicker_l_p[i] = new
 
     def _get_hub_distance(self) -> float:
-        """Distance from robot to the correct alliance hub."""
-        robot_pos = self.drivetrain.get_state().pose.translation()
+        robot_pos = self._drivetrain.get_state().pose.translation()
         alliance = DriverStation.getAlliance()
         hub = RED_HUB if alliance == DriverStation.Alliance.kRed else BLUE_HUB
         return robot_pos.distance(hub)

@@ -27,7 +27,7 @@ from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
 from commands.safe_retract_intake import SafeRetractIntake
-from commands.hub_shot import HubShot
+from commands.hub_shot import HubShot, VirtualGoal
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
@@ -38,11 +38,6 @@ from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import LIMELIGHT_CAMERA_NAME, VisionSubsystem
 from telemetry import Telemetry
 
-# Flywheel speed compensation constants
-_FLYWHEEL_DIAMETER_M = 4 * 0.0254  # 4 inches
-_FLYWHEEL_CIRCUMFERENCE = math.pi * _FLYWHEEL_DIAMETER_M
-_GEAR_RATIO = 1.3  # motor:flywheel
-_SLIP_FACTOR = 0.5  # high — kicker pre-accelerates the ball
 
 
 def joystick_filter(value):
@@ -97,15 +92,10 @@ class RobotContainer:
 
         self._logger = Telemetry(self._max_speed)
 
-        # NT-tunable slip factor for lead compensation
-        shoot_table = NetworkTableInstance.getDefault().getTable("Shoot")
-        self._slip_factor_pub = shoot_table.getDoubleTopic("Slip Factor").publish()
-        self._slip_factor_pub.set(_SLIP_FACTOR)
-        self._slip_factor_sub = shoot_table.getDoubleTopic("Slip Factor").subscribe(_SLIP_FACTOR)
-
         self._joystick_1 = CommandXboxController(0)
 
         self.drivetrain = TunerConstants.create_drivetrain()
+        self._virtual_goal = VirtualGoal(self.drivetrain)
 
         # Path follower
         self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
@@ -186,47 +176,6 @@ class RobotContainer:
             )
         )
 
-        self._joystick_1.povUp().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(0.5).with_velocity_y(0)
-            )
-        )
-        self._joystick_1.povDown().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(-0.5).with_velocity_y(0)
-            )
-        )
-
-        self._joystick_1.povLeft().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(-0.5)
-            )
-        )
-        self._joystick_1.povRight().whileTrue(
-            self.drivetrain.apply_request(
-                lambda: self._forward_straight.with_velocity_x(0).with_velocity_y(0.5)
-            )
-        )
-
-        # Run SysId routines when holding back/start and X/Y.
-        # Note that each routine should be run exactly once in a single log.
-        # (self._joystick.back() & self._joystick.y()).whileTrue(
-        #     self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kForward)
-        # )
-        # (self._joystick.back() & self._joystick.x()).whileTrue(
-        #     self.drivetrain.sys_id_dynamic(SysIdRoutine.Direction.kReverse)
-        # )
-        # (self._joystick.start() & self._joystick.y()).whileTrue(
-        #     self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kForward)
-        # )
-        # (self._joystick.start() & self._joystick.x()).whileTrue(
-        #     self.drivetrain.sys_id_quasistatic(SysIdRoutine.Direction.kReverse)
-        # )
-
-        # reset the field-centric heading on left bumper press
-        self._joystick_1.leftBumper().onTrue(
-            self.drivetrain.runOnce(self.drivetrain.seed_field_centric)
-        )
 
         self.drivetrain.register_telemetry(
             lambda state: self._logger.telemeterize(state)
@@ -484,6 +433,20 @@ class RobotContainer:
         )
 
     def configureCompetitionBindings(self):
+        """
+        Full competition bindings — auto-aim shooting with virtual goal compensation.
+
+        Button layout:
+          Left stick   = Translation (field-centric)
+          Right stick X = Rotation (free drive) / auto-aim (while RT held)
+          RT (hold)    = Aim at hub + shoot (auto RPM + hood from lookup table)
+          LT (hold)    = Deploy intake arm + spin rollers
+          Y            = Stow intake arm
+          RB           = Home hood
+          LB           = Home intake arm
+          Back         = Re-home hood + intake
+        Auto-brake when sticks are idle.
+        """
         self.drivetrain.setDefaultCommand(
             self.drivetrain.apply_request(self._drive_or_brake)
         )
@@ -499,11 +462,10 @@ class RobotContainer:
 
         # RT: Hold to aim at hub + shoot (auto RPM + hood from lookup table)
         self._shoot_at_hub = HubShot(
-            self.shooter, self.kicker, self.indexer, self.hood, self.drivetrain
+            self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
         )
         def _hub_shot_request():
-            aim, vdist, ff = self.calculate_virtual_goal(self._shoot_at_hub.target_rpm)
-            self._shoot_at_hub.virtual_distance = vdist
+            aim, ff = self._virtual_goal.calculate()
             return (
                 self._snap_angle.with_target_direction(aim)
                 .with_target_rate_feedforward(ff)
@@ -634,10 +596,12 @@ class RobotContainer:
         )
 
         def _tune_shot_request():
-            aim, _, ff = self.calculate_virtual_goal(shooter_rpm_sub.get())
+            hub = self._virtual_goal._get_hub()
+            pose = self.drivetrain.get_state().pose
+            dx = hub.X() - pose.X()
+            dy = hub.Y() - pose.Y()
             return (
-                self._snap_angle.with_target_direction(aim)
-                .with_target_rate_feedforward(ff)
+                self._snap_angle.with_target_direction(Rotation2d(math.atan2(dy, dx)))
                 .with_velocity_x(
                     joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
                 )
@@ -684,55 +648,6 @@ class RobotContainer:
         # Back: Re-home hood + intake
         self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
 
-    def _get_hub(self):
-        """Return the correct alliance hub Translation2d."""
-        from commands.hub_shot import BLUE_HUB, RED_HUB
-
-        return (
-            RED_HUB
-            if DriverStation.getAlliance() == DriverStation.Alliance.kRed
-            else BLUE_HUB
-        )
-
-    def calculate_virtual_goal(self, target_rpm: float) -> tuple[Rotation2d, float, float]:
-        """Compute virtual goal accounting for robot velocity during ball flight.
-
-        Returns (aim_direction, virtual_distance, angular_rate_feedforward).
-        """
-        hub = self._get_hub()
-        state = self.drivetrain.get_state()
-        robot = state.pose.translation()
-        speeds = state.speeds
-
-        dx = hub.X() - robot.X()
-        dy = hub.Y() - robot.Y()
-        distance = math.hypot(dx, dy)
-
-        if distance < 0.5:
-            return Rotation2d(math.atan2(dy, dx)), distance, 0.0
-
-        # Ball exit velocity
-        flywheel_rpm = target_rpm * _GEAR_RATIO
-        surface_speed = flywheel_rpm * _FLYWHEEL_CIRCUMFERENCE / 60.0
-        exit_velocity = surface_speed * self._slip_factor_sub.get()
-
-        if exit_velocity < 1.0:
-            return Rotation2d(math.atan2(dy, dx)), distance, 0.0
-
-        flight_time = distance / exit_velocity
-
-        # Virtual goal: shift hub backward by robot velocity * flight time
-        vdx = dx - speeds.vx * flight_time
-        vdy = dy - speeds.vy * flight_time
-        virtual_distance = math.hypot(vdx, vdy)
-        aim_direction = Rotation2d(math.atan2(vdy, vdx))
-
-        # Angular rate feedforward: d/dt atan2(dy, dx)
-        dist_sq = dx * dx + dy * dy
-        angular_rate = (dx * speeds.vy - dy * speeds.vx) / dist_sq
-
-        return aim_direction, virtual_distance, angular_rate
-
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""
         return AutoHome(self.hood, self.intake)
@@ -745,24 +660,3 @@ class RobotContainer:
         """
 
         return self._auto_chooser.getSelected()
-
-        # # Simple drive forward auton
-        # idle = swerve.requests.Idle()
-        # return cmd.sequence(
-        #     # Reset our field centric heading to match the robot
-        #     # facing away from our alliance station wall (0 deg).
-        #     self.drivetrain.runOnce(
-        #         lambda: self.drivetrain.seed_field_centric(Rotation2d.fromDegrees(0))
-        #     ),
-        #     # Then slowly drive forward (away from us) for 5 seconds.
-        #     self.drivetrain.apply_request(
-        #         lambda: (
-        #             self._drive.with_velocity_x(0.5)
-        #             .with_velocity_y(0)
-        #             .with_rotational_rate(0)
-        #         )
-        #     )
-        #     .withTimeout(5.0),
-        #     # Finally idle for the rest of auton
-        #     self.drivetrain.apply_request(lambda: idle)
-        # )
