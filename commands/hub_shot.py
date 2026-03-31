@@ -3,7 +3,7 @@ import ntcore
 from commands2 import Command
 from ntcore import NetworkTableInstance
 from wpilib import DriverStation, Timer
-from wpimath.geometry import Rotation2d, Translation2d
+from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 
 # Field dimensions: 651.22 × 317.69 inches
 FIELD_LENGTH_M = 651.22 * 0.0254  # 16.541 m
@@ -17,7 +17,7 @@ RED_HUB = Translation2d(FIELD_LENGTH_M - HUB_X_M, HUB_Y_M)
 _FLYWHEEL_DIAMETER_M = 4 * 0.0254  # 4 inches
 _FLYWHEEL_CIRCUMFERENCE = math.pi * _FLYWHEEL_DIAMETER_M
 _GEAR_RATIO = 1.3  # motor:flywheel
-_SLIP_FACTOR = 0.5  # high — kicker pre-accelerates the ball
+_SLIP_FACTOR = 0.1  # TUNE via NT "Shoot/Slip Factor"
 _LOOKAHEAD_S = 0.05  # 50ms pose prediction to compensate for control loop latency
 _ITERATIONS = 2  # converge virtual distance ↔ RPM
 
@@ -89,6 +89,7 @@ class VirtualGoal:
         self._vg_dist_pub = vg_table.getDoubleTopic("Virtual Distance").publish()
         self._raw_dist_pub = vg_table.getDoubleTopic("Raw Distance").publish()
         self._flight_time_pub = vg_table.getDoubleTopic("Flight Time").publish()
+        self._vg_pose_pub = vg_table.getStructTopic("Pose", Pose2d).publish()
 
     @staticmethod
     def _get_hub():
@@ -102,7 +103,7 @@ class VirtualGoal:
         """Iterate ballistics ↔ virtual distance to convergence.
 
         Returns (aim_direction, angular_rate_feedforward).
-        Sets last_virtual_distance, last_rpm, last_hood_turns.
+        Updates last_virtual_distance, last_rpm, last_hood_turns.
         """
         hub = self._get_hub()
         state = self._drivetrain.get_state()
@@ -130,6 +131,7 @@ class VirtualGoal:
             aim = Rotation2d(math.atan2(dy, dx))
             rpm, hood = compute_ballistics(raw_distance)
             self._store(raw_distance, rpm, hood, 0.0)
+            self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
             return aim, 0.0
 
         slip = self._slip_factor_sub.get()
@@ -155,6 +157,7 @@ class VirtualGoal:
         ff = (vdx * field_vy - vdy * field_vx) / dist_sq
 
         self._store(distance, rpm, hood, flight_time)
+        self._vg_pose_pub.set(Pose2d(vg_x, vg_y, aim))
         return aim, ff
 
     def _store(self, vdist, rpm, hood, flight_time):
@@ -199,7 +202,7 @@ class HubShot(Command):
         self._kicker_full_pub.set(True)
         self._kicker_full_sub = table.getBooleanTopic("Kicker Full Speed").subscribe(False)
 
-    FEED_DELAY_S = 2.0
+    FEED_DELAY_S = 2.5
 
     def initialize(self):
         self._feed_timer.restart()

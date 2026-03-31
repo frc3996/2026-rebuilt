@@ -64,8 +64,8 @@ class KickerSubSystem(Subsystem):
 
         self._right_config = rev.SparkBaseConfig()
         self._right_config.voltageCompensation(10)
-        self._right_config.smartCurrentLimit(50)
-        self._right_config.secondaryCurrentLimit(60)
+        self._right_config.smartCurrentLimit(30)
+        self._right_config.secondaryCurrentLimit(40)
         self._right_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._right_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         _configure_3_slots(self._right_config, RIGHT_KP_LOW, RIGHT_KP_MID, RIGHT_KP_HIGH, RIGHT_KF)
@@ -77,8 +77,8 @@ class KickerSubSystem(Subsystem):
 
         self._left_config = rev.SparkBaseConfig()
         self._left_config.voltageCompensation(10)
-        self._left_config.smartCurrentLimit(50)
-        self._left_config.secondaryCurrentLimit(60)
+        self._left_config.smartCurrentLimit(30)
+        self._left_config.secondaryCurrentLimit(40)
         self._left_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._left_config.inverted(True)
         self._left_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)

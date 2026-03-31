@@ -34,8 +34,8 @@ class ShooterSubSystem(Subsystem):
 
         self._config = rev.SparkBaseConfig()
         self._config.voltageCompensation(10)
-        self._config.smartCurrentLimit(50)
-        self._config.secondaryCurrentLimit(60)
+        self._config.smartCurrentLimit(30)
+        self._config.secondaryCurrentLimit(40)
         self._config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
 
@@ -68,8 +68,8 @@ class ShooterSubSystem(Subsystem):
 
         follower_config = rev.SparkBaseConfig()
         follower_config.voltageCompensation(10)
-        follower_config.smartCurrentLimit(50)
-        follower_config.secondaryCurrentLimit(60)
+        follower_config.smartCurrentLimit(30)
+        follower_config.secondaryCurrentLimit(40)
         follower_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         follower_config.follow(CANIds.SHOOTER_LEADER, True)
         follower_config.signals.primaryEncoderPositionPeriodMs(500)

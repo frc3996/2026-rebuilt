@@ -17,8 +17,7 @@ POSITION_STALL_CURRENT = 10.0  # Amps  # TUNE
 POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
-# Position constants
-DEPLOY_POSITION = -8.0  # Slightly raised from hard stop (home position)
+DEPLOY_DUTYCYCLE = 0.15  # Gentle duty cycle holding arm against deployed hard stop  # TUNE
 STOW_POSITION = -38.0  # Retracted/stowed position in motor turns
 
 # PID defaults (slot 0 — position)
@@ -83,8 +82,8 @@ class IntakeSubSystem(Subsystem):
         # Roller config — velocity controlled, coast mode
         roller_config = rev.SparkBaseConfig()
         roller_config.voltageCompensation(10)
-        roller_config.smartCurrentLimit(50)
-        roller_config.secondaryCurrentLimit(60)
+        roller_config.smartCurrentLimit(30)
+        roller_config.secondaryCurrentLimit(40)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         roller_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
         roller_config.closedLoop.P(0.0003, rev.ClosedLoopSlot.kSlot0)
@@ -172,8 +171,9 @@ class IntakeSubSystem(Subsystem):
         )
 
     def deploy(self) -> None:
-        """Move arm to deployed (home) position."""
-        self.set_arm_target_position(DEPLOY_POSITION)
+        """Hold arm against deployed hard stop with a gentle duty cycle."""
+        self._arm_position_active = False
+        self._arm_motor.set(DEPLOY_DUTYCYCLE)
 
     # ── Homing helpers ─────────────────────────────────────────────
 
@@ -218,12 +218,7 @@ class IntakeSubSystem(Subsystem):
     # ── Default actions ────────────────────────────────────────────
 
     def hold(self) -> None:
-        """Hold arm at current position if homed, otherwise stop. Stop roller."""
-        if self.homed:
-            if not self._arm_position_active:
-                self.set_arm_target_position(self.get_arm_position())
-        else:
-            self._arm_motor.stopMotor()
+        """Stop roller. Arm does nothing (brake mode holds position)."""
         self._roller_motor.stopMotor()
 
     def stow(self) -> None:

@@ -35,7 +35,7 @@ from subsystems.indexer import IndexerSubSystem
 from subsystems.intake import IntakeSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
-from subsystems.vision import LIMELIGHT_CAMERA_NAME, VisionSubsystem
+from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
 
 
@@ -103,7 +103,7 @@ class RobotContainer:
 
         # Add vision
         self.limelight = VisionSubsystem(
-            swerve=self.drivetrain, camera=LIMELIGHT_CAMERA_NAME
+            swerve=self.drivetrain, cameras=CAMERAS
         )
 
         # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
@@ -464,16 +464,18 @@ class RobotContainer:
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
         )
+        _SHOOT_DRIVE_SCALE = 0.25  # Limit swerve to 50% while shooting to prevent brownouts
+
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate()
             return (
                 self._snap_angle.with_target_direction(aim)
                 .with_target_rate_feedforward(ff)
                 .with_velocity_x(
-                    joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
+                    joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed * _SHOOT_DRIVE_SCALE
                 )
                 .with_velocity_y(
-                    joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed
+                    joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed * _SHOOT_DRIVE_SCALE
                 )
             )
 
