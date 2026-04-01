@@ -147,6 +147,10 @@ class RobotContainer:
                 self.intake,
             ),
         )
+        NamedCommands.registerCommand(
+            "retract-intake",
+            SafeRetractIntake(self.intake),
+        )
 
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings — uncomment ONE group at a time:

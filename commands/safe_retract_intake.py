@@ -5,7 +5,7 @@ from subsystems.intake import (STALL_CURRENT_THRESHOLD,
                                STALL_VELOCITY_THRESHOLD, STOW_POSITION,
                                IntakeSubSystem)
 
-RETRACT_DUTYCYCLE = -0.15  # Gentle duty cycle toward stow (negative = retract)  # TUNE
+RETRACT_DUTYCYCLE = -0.30  # Duty cycle toward stow (negative = retract)  # TUNE
 RETRACT_TIMEOUT_SECONDS = 10.0
 RETRACT_STALL_CYCLES = 10
 
