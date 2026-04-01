@@ -13,12 +13,6 @@
                 "data": {
                   "pathName": "test move"
                 }
-              },
-              {
-                "type": "named",
-                "data": {
-                  "name": "shoot"
-                }
               }
             ]
           }

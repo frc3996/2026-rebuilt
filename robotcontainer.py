@@ -10,7 +10,7 @@ import commands2
 from commands2 import ParallelCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
-from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerPath
+from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerPath, PathPlannerAuto
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
@@ -117,8 +117,8 @@ class RobotContainer:
         self.intake.setDefaultCommand(self.intake.run(self.intake.hold))
         self.hood.setDefaultCommand(self.hood.run(self.hood.stow))
 
-        self.climb_left_path = PathPlannerPath.fromPathFile("climb_left")
-        self.climb_right_path = PathPlannerPath.fromPathFile("climb_right")
+        self.climb_left_path = PathPlannerPath.fromPathFile("test move")
+        self.climb_right_path = PathPlannerPath.fromPathFile("test move")
 
         # Register Named Commands for PathPlanner autos
         # hubshot: runs shooter/kicker/indexer/hood — no drivetrain requirement
