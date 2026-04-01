@@ -7,25 +7,37 @@
         {
           "type": "path",
           "data": {
-            "pathName": "avancer"
+            "pathName": "shoot to intake 2"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "intake"
+            "pathName": "intake 2"
           }
         },
         {
           "type": "path",
           "data": {
-            "pathName": "retour"
+            "pathName": "exit intake 2 to up"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "exit intake 2 to shoot"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "shoot to climb"
           }
         }
       ]
     }
   },
   "resetOdom": true,
-  "folder": null,
+  "folder": "intake",
   "choreoAuto": false
 }

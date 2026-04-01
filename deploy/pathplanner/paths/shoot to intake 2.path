@@ -3,66 +3,70 @@
   "waypoints": [
     {
       "anchor": {
-        "x": 2.456954545454545,
-        "y": 4.0
+        "x": 2.816371794871796,
+        "y": 4.023371794871795
       },
       "prevControl": null,
       "nextControl": {
-        "x": 2.4363409090909087,
-        "y": 3.350670454545454
+        "x": 1.6185128205128225,
+        "y": 3.267423076923077
       },
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "shoot"
     },
     {
       "anchor": {
-        "x": 2.786772727272727,
-        "y": 1.0975568181818187
+        "x": 3.6070897435897447,
+        "y": 2.5000769230769233
       },
       "prevControl": {
-        "x": 2.219606485531264,
-        "y": 1.5650015229137944
+        "x": 3.3572169664641733,
+        "y": 2.5080515861766752
       },
       "nextControl": {
-        "x": 3.724693181818181,
-        "y": 0.3245454545454548
+        "x": 4.700141025641027,
+        "y": 2.465192307692308
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 5.7757499999999995,
-        "y": 0.5719090909090914
+        "x": 5.979243589743592,
+        "y": 2.5000769230769233
       },
       "prevControl": {
-        "x": 4.518318181818182,
-        "y": 0.5203750000000005
+        "x": 4.7117692307692325,
+        "y": 2.465192307692308
       },
       "nextControl": {
-        "x": 7.00132995365311,
-        "y": 0.6221377775342191
+        "x": 6.494113790162319,
+        "y": 2.514247662537989
       },
       "isLocked": false,
       "linkedName": null
     },
     {
       "anchor": {
-        "x": 7.786,
-        "y": 1.819
+        "x": 7.654,
+        "y": 1.244
       },
       "prevControl": {
-        "x": 7.487105824331346,
-        "y": 1.3758044229346573
+        "x": 6.362974358974359,
+        "y": 0.7442179487179501
       },
       "nextControl": null,
       "isLocked": false,
-      "linkedName": null
+      "linkedName": "start intake 2"
     }
   ],
   "rotationTargets": [
     {
       "waypointRelativePos": 1,
+      "rotationDegrees": -90.0
+    },
+    {
+      "waypointRelativePos": 2,
       "rotationDegrees": -90.0
     }
   ],
@@ -82,10 +86,10 @@
     "rotation": -90.0
   },
   "reversed": false,
-  "folder": null,
+  "folder": "intake",
   "idealStartingState": {
     "velocity": 0,
-    "rotation": -0.6437457141753696
+    "rotation": 180.0
   },
   "useDefaultConstraints": true
 }
