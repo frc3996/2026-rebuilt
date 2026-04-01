@@ -2,6 +2,7 @@ import math
 import ntcore
 from commands2 import Command
 from ntcore import NetworkTableInstance
+from pathplannerlib.controller import PPHolonomicDriveController
 from wpilib import DriverStation, Timer
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 
@@ -206,6 +207,12 @@ class HubShot(Command):
 
     def initialize(self):
         self._feed_timer.restart()
+        PPHolonomicDriveController.setRotationTargetOverride(self._aim_override)
+
+    def _aim_override(self):
+        """Rotation target override for PathPlanner — aims at virtual goal."""
+        aim, _ = self._virtual_goal.calculate()
+        return aim
 
     def execute(self):
         vg = self._virtual_goal
@@ -234,6 +241,7 @@ class HubShot(Command):
         self._feeding_pub.set(feeding)
 
     def end(self, interrupted: bool):
+        PPHolonomicDriveController.setRotationTargetOverride(None)
         self.shooter.stop()
         self.kicker.stop()
         self.indexer.stop()

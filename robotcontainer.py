@@ -10,7 +10,7 @@ import commands2
 from commands2 import ParallelCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
-from pathplannerlib.auto import AutoBuilder, PathPlannerPath
+from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerPath
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
@@ -26,8 +26,8 @@ from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
 from commands.home_intake import HomeIntake
-from commands.safe_retract_intake import SafeRetractIntake
 from commands.hub_shot import HubShot, VirtualGoal
+from commands.safe_retract_intake import SafeRetractIntake
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
@@ -37,7 +37,6 @@ from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
-
 
 
 def joystick_filter(value):
@@ -102,9 +101,7 @@ class RobotContainer:
         SmartDashboard.putData("Auto Mode", self._auto_chooser)
 
         # Add vision
-        self.limelight = VisionSubsystem(
-            swerve=self.drivetrain, cameras=CAMERAS
-        )
+        self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
 
         # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
@@ -122,6 +119,34 @@ class RobotContainer:
 
         self.climb_left_path = PathPlannerPath.fromPathFile("climb_left")
         self.climb_right_path = PathPlannerPath.fromPathFile("climb_right")
+
+        # Register Named Commands for PathPlanner autos
+        # hubshot: runs shooter/kicker/indexer/hood — no drivetrain requirement
+        # so it's safe as both an event marker (during path) and sequential command.
+        # Use path end-rotation to aim the robot at the hub.
+        NamedCommands.registerCommand(
+            "hubshot",
+            HubShot(
+                self.shooter,
+                self.kicker,
+                self.indexer,
+                self.hood,
+                self._virtual_goal,
+            ),
+        )
+        NamedCommands.registerCommand(
+            "intake",
+            cmd.startEnd(
+                lambda: (
+                    self.intake.deploy(),
+                    self.intake.set_roller_duty_cycle(1.0),
+                ),
+                lambda: (
+                    self.intake.set_roller_duty_cycle(0),
+                ),
+                self.intake,
+            ),
+        )
 
         # self._do_pigeon_zero = self.drivetrain.seed_field_centric
         # Configure the button bindings — uncomment ONE group at a time:
@@ -175,7 +200,6 @@ class RobotContainer:
                 )
             )
         )
-
 
         self.drivetrain.register_telemetry(
             lambda state: self._logger.telemeterize(state)
@@ -464,7 +488,7 @@ class RobotContainer:
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
         )
-        _SHOOT_DRIVE_SCALE = 0.25  # Limit swerve to 50% while shooting to prevent brownouts
+        _SHOOT_DRIVE_SCALE = 0.25  # Limit swerve to 25% while shooting to prevent brownouts
 
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate()
@@ -472,10 +496,14 @@ class RobotContainer:
                 self._snap_angle.with_target_direction(aim)
                 .with_target_rate_feedforward(ff)
                 .with_velocity_x(
-                    joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed * _SHOOT_DRIVE_SCALE
+                    joystick_filter(-self._joystick_1.getLeftY())
+                    * self._max_speed
+                    * _SHOOT_DRIVE_SCALE
                 )
                 .with_velocity_y(
-                    joystick_filter(-self._joystick_1.getLeftX()) * self._max_speed * _SHOOT_DRIVE_SCALE
+                    joystick_filter(-self._joystick_1.getLeftX())
+                    * self._max_speed
+                    * _SHOOT_DRIVE_SCALE
                 )
             )
 
