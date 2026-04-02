@@ -203,7 +203,7 @@ class HubShot(Command):
         self._kicker_full_pub.set(True)
         self._kicker_full_sub = table.getBooleanTopic("Kicker Full Speed").subscribe(False)
 
-    FEED_DELAY_S = 2.5
+    FEED_DELAY_S = 2
 
     def initialize(self):
         self._feed_timer.restart()

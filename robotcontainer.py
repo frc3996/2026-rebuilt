@@ -41,6 +41,8 @@ from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
 
 
+
+
 def joystick_filter(value):
     """Squared response curve with 5% deadband. Rescales so output ramps smoothly from 0."""
     if abs(value) < 0.05:
@@ -137,14 +139,7 @@ class RobotContainer:
                 self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
             )
         )
-        # Reverse indexer briefly after shooting to clear jammed balls
-        hubshot_trigger.onFalse(
-            cmd.sequence(
-                cmd.runOnce(lambda: self.indexer.set_target_output(-0.5), self.indexer),
-                cmd.waitSeconds(0.2),
-                cmd.runOnce(self.indexer.stop, self.indexer)
-            )
-        )
+        hubshot_trigger.onFalse(self._clearout_command())
 
         EventTrigger("intake").whileTrue(
             cmd.startEnd(
@@ -163,6 +158,17 @@ class RobotContainer:
         # self.configureTuningTestBindings()
         # self.configureManualBindings()
         self.configureCompetitionBindings()
+
+    def _clearout_command(self):
+        """Reverse conveyor while shooter+kicker keep running, then stop."""
+        return cmd.run(
+            lambda: (
+                self.shooter.set_target_speed(self._virtual_goal.last_rpm),
+                self.kicker.set_duty_cycle(1.0),
+                self.indexer.set_target_output(-1.0),
+            ),
+            self.shooter, self.kicker, self.indexer,
+        ).withTimeout(1.0)
 
     def _drive_or_brake(self):
         """Swerve request: drive from joystick input, or brake when sticks are idle."""
@@ -524,14 +530,8 @@ class RobotContainer:
             )
         )
 
-        # RT release: Reverse indexer briefly to clear jammed balls
-        self._joystick_1.rightTrigger().onFalse(
-            cmd.sequence(
-                cmd.runOnce(lambda: self.indexer.set_target_output(-0.5), self.indexer),
-                cmd.waitSeconds(0.2),
-                cmd.runOnce(self.indexer.stop, self.indexer)
-            )
-        )
+        # RT release: clearout — reverse conveyor, keep shooter+kicker for 1s
+        self._joystick_1.rightTrigger().onFalse(self._clearout_command())
 
         # LT: Hold to deploy intake arm + spin rollers
         self._joystick_1.leftTrigger().whileTrue(
