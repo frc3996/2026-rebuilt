@@ -131,11 +131,21 @@ class RobotContainer:
         # ── Event Triggers (for zoned event markers on paths) ──
         # In PathPlanner GUI, create event markers with these trigger names.
         # Use zones (start + end position) for whileTrue behavior.
-        EventTrigger("hubshot").whileTrue(
+        hubshot_trigger = EventTrigger("hubshot")
+        hubshot_trigger.whileTrue(
             HubShot(
                 self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
             )
         )
+        # Reverse indexer briefly after shooting to clear jammed balls
+        hubshot_trigger.onFalse(
+            cmd.sequence(
+                cmd.runOnce(lambda: self.indexer.set_target_output(-0.5), self.indexer),
+                cmd.waitSeconds(0.2),
+                cmd.runOnce(self.indexer.stop, self.indexer)
+            )
+        )
+
         EventTrigger("intake").whileTrue(
             cmd.startEnd(
                 lambda: (
@@ -511,6 +521,15 @@ class RobotContainer:
             ParallelCommandGroup(
                 self._shoot_at_hub,
                 self.drivetrain.apply_request(_hub_shot_request),
+            )
+        )
+
+        # RT release: Reverse indexer briefly to clear jammed balls
+        self._joystick_1.rightTrigger().onFalse(
+            cmd.sequence(
+                cmd.runOnce(lambda: self.indexer.set_target_output(-0.5), self.indexer),
+                cmd.waitSeconds(0.2),
+                cmd.runOnce(self.indexer.stop, self.indexer)
             )
         )
 
