@@ -10,7 +10,9 @@ import commands2
 from commands2 import ParallelCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
-from pathplannerlib.auto import AutoBuilder, NamedCommands, PathPlannerPath, PathPlannerAuto
+from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
+                                 PathPlannerPath)
+from pathplannerlib.events import EventTrigger
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
@@ -120,39 +122,31 @@ class RobotContainer:
         self.climb_left_path = PathPlannerPath.fromPathFile("test move")
         self.climb_right_path = PathPlannerPath.fromPathFile("test move")
 
-        # Register Named Commands for PathPlanner autos
-        # hubshot: runs shooter/kicker/indexer/hood — no drivetrain requirement
-        # so it's safe as both an event marker (during path) and sequential command.
-        # Use path end-rotation to aim the robot at the hub.
-        NamedCommands.registerCommand(
-            "hubshot",
-            HubShot(
-                self.shooter,
-                self.kicker,
-                self.indexer,
-                self.hood,
-                self._virtual_goal,
-            ),
-        )
-        NamedCommands.registerCommand(
-            "intake",
-            cmd.startEnd(
-                lambda: (
-                    self.intake.deploy(),
-                    self.intake.set_roller_duty_cycle(1.0),
-                ),
-                lambda: (
-                    self.intake.set_roller_duty_cycle(0),
-                ),
-                self.intake,
-            ),
-        )
+        # ── Named Commands (for sequential auto structure) ──
         NamedCommands.registerCommand(
             "retract-intake",
             SafeRetractIntake(self.intake),
         )
 
-        # self._do_pigeon_zero = self.drivetrain.seed_field_centric
+        # ── Event Triggers (for zoned event markers on paths) ──
+        # In PathPlanner GUI, create event markers with these trigger names.
+        # Use zones (start + end position) for whileTrue behavior.
+        EventTrigger("hubshot").whileTrue(
+            HubShot(
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+            )
+        )
+        EventTrigger("intake").whileTrue(
+            cmd.startEnd(
+                lambda: (
+                    self.intake.deploy(),
+                    self.intake.set_roller_duty_cycle(1.0),
+                ),
+                lambda: (self.intake.set_roller_duty_cycle(0),),
+                self.intake,
+            )
+        )
+
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
         # self.configureHardwareTestBindings()
@@ -492,7 +486,9 @@ class RobotContainer:
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
         )
-        _SHOOT_DRIVE_SCALE = 0.25  # Limit swerve to 25% while shooting to prevent brownouts
+        _SHOOT_DRIVE_SCALE = (
+            0.25  # Limit swerve to 25% while shooting to prevent brownouts
+        )
 
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate()
