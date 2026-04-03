@@ -41,8 +41,6 @@ from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
 
 
-
-
 def joystick_filter(value):
     """Squared response curve with 5% deadband. Rescales so output ramps smoothly from 0."""
     if abs(value) < 0.05:
@@ -167,8 +165,10 @@ class RobotContainer:
                 self.kicker.set_duty_cycle(1.0),
                 self.indexer.set_target_output(-1.0),
             ),
-            self.shooter, self.kicker, self.indexer,
-        ).withTimeout(1.0)
+            self.shooter,
+            self.kicker,
+            self.indexer,
+        ).withTimeout(0.5)
 
     def _drive_or_brake(self):
         """Swerve request: drive from joystick input, or brake when sticks are idle."""
@@ -533,15 +533,38 @@ class RobotContainer:
         # RT release: clearout — reverse conveyor, keep shooter+kicker for 1s
         self._joystick_1.rightTrigger().onFalse(self._clearout_command())
 
-        # LT: Hold to deploy intake arm + spin rollers
+        # LT: Hold to deploy intake arm + spin rollers (speed limited)
+        _INTAKE_DRIVE_SCALE = 0.25  # Limit swerve to 50% while intaking  # TUNE
+
+        def _intake_drive_request():
+            return (
+                self._drive.with_velocity_x(
+                    joystick_filter(-self._joystick_1.getLeftY())
+                    * self._max_speed
+                    * _INTAKE_DRIVE_SCALE
+                )
+                .with_velocity_y(
+                    joystick_filter(-self._joystick_1.getLeftX())
+                    * self._max_speed
+                    * _INTAKE_DRIVE_SCALE
+                )
+                .with_rotational_rate(
+                    joystick_filter(-self._joystick_1.getRightX())
+                    * self._max_angular_rate
+                )
+            )
+
         self._joystick_1.leftTrigger().whileTrue(
-            cmd.runEnd(
-                lambda: (
-                    self.intake.deploy(),
-                    self.intake.set_roller_duty_cycle(1.0),
+            ParallelCommandGroup(
+                cmd.runEnd(
+                    lambda: (
+                        self.intake.deploy(),
+                        self.intake.set_roller_duty_cycle(1.0),
+                    ),
+                    lambda: self.intake.set_roller_duty_cycle(0),
+                    self.intake,
                 ),
-                lambda: self.intake.set_roller_duty_cycle(0),
-                self.intake,
+                self.drivetrain.apply_request(_intake_drive_request),
             )
         )
 

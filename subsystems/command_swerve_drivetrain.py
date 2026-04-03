@@ -240,7 +240,7 @@ class CommandSwerveDrivetrain(Subsystem, TunerSwerveDrivetrain):
             ),
             PPHolonomicDriveController(
                 # PID constants for translation
-                PIDConstants(10.0, 0.0, 0.0),
+                PIDConstants(5.0, 0.0, 0.0),
                 # PID constants for rotation
                 PIDConstants(7.0, 0.0, 0.0),
             ),
