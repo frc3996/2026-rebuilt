@@ -228,6 +228,7 @@ class TunerConstants:
 
         return CommandSwerveDrivetrain(
             cls.drivetrain_constants,
+            50.0,  # odometry_update_frequency in Hz
             [
                 cls.front_left,
                 cls.front_right,

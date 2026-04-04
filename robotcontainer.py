@@ -98,10 +98,6 @@ class RobotContainer:
         self.drivetrain = TunerConstants.create_drivetrain()
         self._virtual_goal = VirtualGoal(self.drivetrain)
 
-        # Path follower
-        self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
-        SmartDashboard.putData("Auto Mode", self._auto_chooser)
-
         # Add vision
         self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
 
@@ -125,7 +121,23 @@ class RobotContainer:
         # ── Named Commands (for sequential auto structure) ──
         NamedCommands.registerCommand(
             "retract-intake",
-            SafeRetractIntake(self.intake),
+            cmd.none()  # Dummy command
+        )
+        NamedCommands.registerCommand(
+            "intake",
+            cmd.none()  # Dummy command
+        )
+        NamedCommands.registerCommand(
+            "stop intake",
+            cmd.none()  # Dummy command
+        )
+        NamedCommands.registerCommand(
+            "shoot",
+            cmd.none()  # Dummy command
+        )
+        NamedCommands.registerCommand(
+            "climb",
+            cmd.none()  # Dummy command
         )
 
         # ── Event Triggers (for zoned event markers on paths) ──
@@ -149,6 +161,10 @@ class RobotContainer:
                 self.intake,
             )
         )
+
+        # Path follower
+        self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
+        SmartDashboard.putData("Auto Mode", self._auto_chooser)
 
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
