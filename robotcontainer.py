@@ -155,8 +155,8 @@ class RobotContainer:
         # self.configureSwerveButtonBindings()
         # self.configureHardwareTestBindings()
         # self.configureTuningTestBindings()
-        self.configureManualBindings()
-        # self.configureCompetitionBindings()
+        # self.configureManualBindings()
+        self.configureCompetitionBindings()
 
     def _clearout_command(self):
         """Reverse conveyor while shooter+kicker keep running, then stop."""

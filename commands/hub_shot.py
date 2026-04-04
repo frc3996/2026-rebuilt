@@ -43,10 +43,10 @@ def _rpm_to_exit_velocity(rpm: float, slip: float) -> float:
 
 # Calibration data: (distance_meters, hood_motor_turns, shooter_rpm)
 SHOT_TABLE: list[tuple[float, float, int]] = [
-    (1.74, 0.1, 2120),
-    (2.70, 0.1, 2300),
-    (3.72, 0.5, 2660),
-    (4.48, 0.5, 2920),
+    (1.87, 0.1, 2020),
+    (2.72, 0.1, 2200),
+    (3.76, 0.1, 2500),
+    (5.26, 1.0, 2840),
 ]
 
 _dists = [d for d, _, _ in SHOT_TABLE]
