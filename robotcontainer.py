@@ -82,12 +82,9 @@ class RobotContainer:
             swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
         )
         # Snap angle requests - maintain heading while driving
-        # Use BLUE_ALLIANCE perspective since VirtualGoal returns field-absolute angles
+        # Uses default OPERATOR_PERSPECTIVE; VirtualGoal.calculate() converts to match
         self._snap_angle = (
             swerve.requests.FieldCentricFacingAngle()
-            .with_forward_perspective(
-                swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE
-            )
             .with_deadband(self._max_speed * 0.1)
             .with_drive_request_type(
                 swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
@@ -158,8 +155,8 @@ class RobotContainer:
         # self.configureSwerveButtonBindings()
         # self.configureHardwareTestBindings()
         # self.configureTuningTestBindings()
-        # self.configureManualBindings()
-        self.configureCompetitionBindings()
+        self.configureManualBindings()
+        # self.configureCompetitionBindings()
 
     def _clearout_command(self):
         """Reverse conveyor while shooter+kicker keep running, then stop."""
@@ -676,8 +673,11 @@ class RobotContainer:
             pose = self.drivetrain.get_state().pose
             dx = hub.X() - pose.X()
             dy = hub.Y() - pose.Y()
+            aim = Rotation2d(math.atan2(dy, dx))
+            if DriverStation.getAlliance() == DriverStation.Alliance.kRed:
+                aim = aim.rotateBy(Rotation2d(math.pi))
             return (
-                self._snap_angle.with_target_direction(Rotation2d(math.atan2(dy, dx)))
+                self._snap_angle.with_target_direction(aim)
                 .with_velocity_x(
                     joystick_filter(-self._joystick_1.getLeftY()) * self._max_speed
                 )
