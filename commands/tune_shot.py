@@ -18,7 +18,6 @@ from subsystems.shooter import (
 )
 
 SHOOTER_TOLERANCE_RPM = 75
-KICKER_TOLERANCE_RPM = 150
 SHOT_LOG_PATH = Path("/home/lvuser/shot_tuning.csv")
 
 
@@ -77,32 +76,8 @@ class TuneShot(Command):
         pid_table.getDoubleTopic("Shooter kP Mid").publish().set(KP_MID)
         pid_table.getDoubleTopic("Shooter kP High").publish().set(KP_HIGH)
 
-        from subsystems.kicker import (
-            LEFT_KP_HIGH,
-            LEFT_KP_LOW,
-            LEFT_KP_MID,
-            RIGHT_KP_HIGH,
-            RIGHT_KP_LOW,
-            RIGHT_KP_MID,
-        )
-        self._kicker_r_low_sub = pid_table.getDoubleTopic("Kicker R kP Low").subscribe(RIGHT_KP_LOW)
-        self._kicker_r_mid_sub = pid_table.getDoubleTopic("Kicker R kP Mid").subscribe(RIGHT_KP_MID)
-        self._kicker_r_high_sub = pid_table.getDoubleTopic("Kicker R kP High").subscribe(RIGHT_KP_HIGH)
-        pid_table.getDoubleTopic("Kicker R kP Low").publish().set(RIGHT_KP_LOW)
-        pid_table.getDoubleTopic("Kicker R kP Mid").publish().set(RIGHT_KP_MID)
-        pid_table.getDoubleTopic("Kicker R kP High").publish().set(RIGHT_KP_HIGH)
-
-        self._kicker_l_low_sub = pid_table.getDoubleTopic("Kicker L kP Low").subscribe(LEFT_KP_LOW)
-        self._kicker_l_mid_sub = pid_table.getDoubleTopic("Kicker L kP Mid").subscribe(LEFT_KP_MID)
-        self._kicker_l_high_sub = pid_table.getDoubleTopic("Kicker L kP High").subscribe(LEFT_KP_HIGH)
-        pid_table.getDoubleTopic("Kicker L kP Low").publish().set(LEFT_KP_LOW)
-        pid_table.getDoubleTopic("Kicker L kP Mid").publish().set(LEFT_KP_MID)
-        pid_table.getDoubleTopic("Kicker L kP High").publish().set(LEFT_KP_HIGH)
-
         # Track last applied values to avoid unnecessary CAN updates
         self._last_shooter_p = [KP_LOW, KP_MID, KP_HIGH]
-        self._last_kicker_r_p = [RIGHT_KP_LOW, RIGHT_KP_MID, RIGHT_KP_HIGH]
-        self._last_kicker_l_p = [LEFT_KP_LOW, LEFT_KP_MID, LEFT_KP_HIGH]
 
     FEED_DELAY_S = 2.0
 
@@ -117,7 +92,7 @@ class TuneShot(Command):
 
         self.hood.set_target_position(hood_pos)
         self.shooter.set_target_speed(target_rpm)
-        self.kicker.set_target_speed(target_rpm)
+        self.kicker.set_duty_cycle(1.0)
 
         feeding = self._feed_timer.hasElapsed(self.FEED_DELAY_S)
         if feeding:
@@ -161,26 +136,6 @@ class TuneShot(Command):
             if abs(new - old) > 1e-8:
                 self.shooter.set_slot_p(slots[i], new)
                 self._last_shooter_p[i] = new
-
-        kicker_r_p = [
-            self._kicker_r_low_sub.get(),
-            self._kicker_r_mid_sub.get(),
-            self._kicker_r_high_sub.get(),
-        ]
-        for i, (new, old) in enumerate(zip(kicker_r_p, self._last_kicker_r_p)):
-            if abs(new - old) > 1e-8:
-                self.kicker.set_right_slot_p(slots[i], new)
-                self._last_kicker_r_p[i] = new
-
-        kicker_l_p = [
-            self._kicker_l_low_sub.get(),
-            self._kicker_l_mid_sub.get(),
-            self._kicker_l_high_sub.get(),
-        ]
-        for i, (new, old) in enumerate(zip(kicker_l_p, self._last_kicker_l_p)):
-            if abs(new - old) > 1e-8:
-                self.kicker.set_left_slot_p(slots[i], new)
-                self._last_kicker_l_p[i] = new
 
     def _get_hub_distance(self) -> float:
         robot_pos = self._drivetrain.get_state().pose.translation()

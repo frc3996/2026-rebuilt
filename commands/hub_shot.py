@@ -100,10 +100,17 @@ class VirtualGoal:
             else BLUE_HUB
         )
 
+    def calculate_operator(self) -> tuple[Rotation2d, float]:
+        """Like calculate(), but returns aim in operator perspective for FieldCentricFacingAngle."""
+        aim, ff = self.calculate()
+        if DriverStation.getAlliance() == DriverStation.Alliance.kRed:
+            aim = aim.rotateBy(Rotation2d(math.pi))
+        return aim, ff
+
     def calculate(self) -> tuple[Rotation2d, float]:
         """Iterate ballistics ↔ virtual distance to convergence.
 
-        Returns (aim_direction in operator perspective, angular_rate_feedforward).
+        Returns (aim_direction field-absolute, angular_rate_feedforward).
         Updates last_virtual_distance, last_rpm, last_hood_turns.
         """
         hub = self._get_hub()
@@ -128,13 +135,8 @@ class VirtualGoal:
         self.last_raw_distance = raw_distance
         self._raw_dist_pub.set(raw_distance)
 
-        is_red = DriverStation.getAlliance() == DriverStation.Alliance.kRed
-        _flip = Rotation2d(math.pi)
-
         if raw_distance < 0.5:
             aim = Rotation2d(math.atan2(dy, dx))
-            if is_red:
-                aim = aim.rotateBy(_flip)
             rpm, hood = compute_ballistics(raw_distance)
             self._store(raw_distance, rpm, hood, 0.0)
             self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
@@ -157,8 +159,6 @@ class VirtualGoal:
         vdx = vg_x - pred_x
         vdy = vg_y - pred_y
         aim = Rotation2d(math.atan2(vdy, vdx))
-        if is_red:
-            aim = aim.rotateBy(_flip)
 
         # Angular rate feedforward: d/dt atan2(dy, dx) from field-relative motion
         dist_sq = vdx * vdx + vdy * vdy

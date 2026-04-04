@@ -98,22 +98,6 @@ class KickerSubSystem(Subsystem):
         self._right_amps_pub = table.getDoubleTopic("Right Amps").publish()
         self._left_amps_pub = table.getDoubleTopic("Left Amps").publish()
 
-    def set_right_slot_p(self, slot: rev.ClosedLoopSlot, kp: float) -> None:
-        self._right_config.closedLoop.P(kp, slot)
-        self._right_motor.configure(
-            self._right_config,
-            rev.ResetMode.kNoResetSafeParameters,
-            rev.PersistMode.kNoPersistParameters,
-        )
-
-    def set_left_slot_p(self, slot: rev.ClosedLoopSlot, kp: float) -> None:
-        self._left_config.closedLoop.P(kp, slot)
-        self._left_motor.configure(
-            self._left_config,
-            rev.ResetMode.kNoResetSafeParameters,
-            rev.PersistMode.kNoPersistParameters,
-        )
-
     def set_duty_cycle(self, output: float) -> None:
         self._right_motor.set(output)
         self._left_motor.set(output)

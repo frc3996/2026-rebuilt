@@ -508,7 +508,7 @@ class RobotContainer:
         )
 
         def _hub_shot_request():
-            aim, ff = self._virtual_goal.calculate()
+            aim, ff = self._virtual_goal.calculate_operator()
             return (
                 self._snap_angle.with_target_direction(aim)
                 .with_target_rate_feedforward(ff)
