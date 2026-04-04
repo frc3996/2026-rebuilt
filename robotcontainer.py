@@ -82,8 +82,12 @@ class RobotContainer:
             swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
         )
         # Snap angle requests - maintain heading while driving
+        # Use BLUE_ALLIANCE perspective since VirtualGoal returns field-absolute angles
         self._snap_angle = (
             swerve.requests.FieldCentricFacingAngle()
+            .with_forward_perspective(
+                swerve.requests.ForwardPerspectiveValue.BLUE_ALLIANCE
+            )
             .with_deadband(self._max_speed * 0.1)
             .with_drive_request_type(
                 swerve.SwerveModule.DriveRequestType.OPEN_LOOP_VOLTAGE
@@ -119,39 +123,23 @@ class RobotContainer:
         self.climb_right_path = PathPlannerPath.fromPathFile("test move")
 
         # ── Named Commands (for sequential auto structure) ──
+        NamedCommands.registerCommand("retract-intake", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("intake", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("stop intake", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("shoot", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("climb", cmd.none())  # Dummy command
+
+        # ── Named Commands for auto sequencing ──
         NamedCommands.registerCommand(
-            "retract-intake",
-            cmd.none()  # Dummy command
-        )
-        NamedCommands.registerCommand(
-            "intake",
-            cmd.none()  # Dummy command
-        )
-        NamedCommands.registerCommand(
-            "stop intake",
-            cmd.none()  # Dummy command
-        )
-        NamedCommands.registerCommand(
-            "shoot",
-            cmd.none()  # Dummy command
-        )
-        NamedCommands.registerCommand(
-            "climb",
-            cmd.none()  # Dummy command
+            "hubshot",
+            HubShot(
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+            ).finallyDo(lambda interrupted: self._clearout_command().schedule()),
         )
 
         # ── Event Triggers (for zoned event markers on paths) ──
-        # In PathPlanner GUI, create event markers with these trigger names.
-        # Use zones (start + end position) for whileTrue behavior.
-        hubshot_trigger = EventTrigger("hubshot")
-        hubshot_trigger.whileTrue(
-            HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-            )
-        )
-        hubshot_trigger.onFalse(self._clearout_command())
-
-        EventTrigger("intake").whileTrue(
+        NamedCommands.registerCommand(
+            "intake",
             cmd.startEnd(
                 lambda: (
                     self.intake.deploy(),
@@ -159,7 +147,7 @@ class RobotContainer:
                 ),
                 lambda: (self.intake.set_roller_duty_cycle(0),),
                 self.intake,
-            )
+            ),
         )
 
         # Path follower

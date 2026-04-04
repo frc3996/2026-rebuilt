@@ -212,8 +212,7 @@ class HubShot(Command):
     def _aim_override(self):
         """Rotation target override for PathPlanner — aims at virtual goal."""
         aim, _ = self._virtual_goal.calculate()
-        # PathPlanner expects robot front, but shooter is on back — add 180°
-        return aim + Rotation2d(math.pi)
+        return aim
 
     def execute(self):
         vg = self._virtual_goal
