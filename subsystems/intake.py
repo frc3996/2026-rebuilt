@@ -81,7 +81,7 @@ class IntakeSubSystem(Subsystem):
 
         # Roller config — velocity controlled, coast mode
         roller_config = rev.SparkBaseConfig()
-        roller_config.voltageCompensation(10)
+        roller_config.voltageCompensation(10.5)
         roller_config.smartCurrentLimit(30)
         roller_config.secondaryCurrentLimit(40)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

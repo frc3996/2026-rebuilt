@@ -7,7 +7,7 @@
 import math
 
 import commands2
-from commands2 import ParallelCommandGroup, cmd
+from commands2 import ParallelCommandGroup, SequentialCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
 from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
@@ -18,8 +18,9 @@ from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 
-# from subsystems.climb import ClimbSubsystem
-# from commands.climb_commands import ExtendClimb, RetractClimb
+from commands.dump_shot import DumpShot
+from subsystems.climb import ClimbSubsystem
+from commands.climb_commands import ExtendClimb, RetractClimb
 from commands.auto_home import AutoHome
 from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
@@ -95,6 +96,7 @@ class RobotContainer:
         self._logger = Telemetry(self._max_speed)
 
         self._joystick_1 = CommandXboxController(0)
+        self._joystick_2 = CommandXboxController(1)
 
         self.drivetrain = TunerConstants.create_drivetrain()
         self._virtual_goal = VirtualGoal(self.drivetrain)
@@ -102,7 +104,7 @@ class RobotContainer:
         # Add vision
         self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
 
-        # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
+        self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
         self.hood = HoodSubSystem()
         self.intake = IntakeSubSystem()
@@ -169,7 +171,7 @@ class RobotContainer:
             self.shooter,
             self.kicker,
             self.indexer,
-        ).withTimeout(0.5)
+        ).withTimeout(0.25)
 
     def _drive_or_brake(self):
         """Swerve request: drive from joystick input, or brake when sticks are idle."""
@@ -507,6 +509,8 @@ class RobotContainer:
             0.25  # Limit swerve to 25% while shooting to prevent brownouts
         )
 
+        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
+
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate_operator()
             return (
@@ -525,9 +529,11 @@ class RobotContainer:
             )
 
         self._joystick_1.rightTrigger().whileTrue(
-            ParallelCommandGroup(
-                self._shoot_at_hub,
-                self.drivetrain.apply_request(_hub_shot_request),
+            SequentialCommandGroup(self._clearout_command(),
+                ParallelCommandGroup(
+                    self._shoot_at_hub,
+                    self.drivetrain.apply_request(_hub_shot_request),
+                )
             )
         )
 
@@ -535,7 +541,7 @@ class RobotContainer:
         self._joystick_1.rightTrigger().onFalse(self._clearout_command())
 
         # LT: Hold to deploy intake arm + spin rollers (speed limited)
-        _INTAKE_DRIVE_SCALE = 0.25  # Limit swerve to 50% while intaking  # TUNE
+        _INTAKE_DRIVE_SCALE = 0.50  # Limit swerve to 50% while intaking  # TUNE
 
         def _intake_drive_request():
             return (
@@ -586,8 +592,27 @@ class RobotContainer:
         self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
 
         # Climb function — disabled until PCM is on CAN bus
-        # self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
-        # self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
+        self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
+        self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
+
+        # Joystick 2 bindings
+        # POV Up: Enable MegaTag2 while held
+        self._joystick_2.povUp().onTrue(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', True),
+                )
+            )
+        )
+        self._joystick_2.povUp().onFalse(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', False),
+                )
+            )
+        )
 
     def configureManualBindings(self):
         """
@@ -710,9 +735,23 @@ class RobotContainer:
 
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
+
+
+        self._joystick_1.rightBumper().whileTrue(
+            SequentialCommandGroup(self._clearout_command(),
+                ParallelCommandGroup(
+                    self._dump_shot,
+                )
+            )
+        )
+        self._joystick_1.rightBumper().onFalse(self._clearout_command())
+
+
+
 
         # RB: Home hood
-        self._joystick_1.rightBumper().onTrue(
+        self._joystick_2.rightBumper().onTrue(
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
 
