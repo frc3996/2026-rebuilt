@@ -26,7 +26,7 @@ class VisionSubsystem(Subsystem):
     def __init__(self, swerve: CommandSwerveDrivetrain, cameras: list[str]):
         self._swerve: CommandSwerveDrivetrain = swerve
         self._cameras = cameras
-        self._use_megatag2 = False
+        self._use_megatag2 = True
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Vision")
         self._too_far_pubs = {
@@ -80,6 +80,9 @@ class VisionSubsystem(Subsystem):
             estimate.timestamp_seconds,
             self._get_dynamic_std_devs(estimate),
         )
+
+    def set_megatag2(self, enabled: bool) -> None:
+        self._use_megatag2 = enabled
 
     def set_throttle(self, throttle: int) -> None:
         for cam in self._cameras:

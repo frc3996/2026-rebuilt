@@ -21,6 +21,7 @@ from wpimath.units import rotationsToRadians
 # from subsystems.climb import ClimbSubsystem
 # from commands.climb_commands import ExtendClimb, RetractClimb
 from commands.auto_home import AutoHome
+from commands.dump_shot import DumpShot
 from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
 from commands.auto_tune_kicker import AutoTuneKickerCommand
@@ -102,6 +103,14 @@ class RobotContainer:
         # Add vision
         self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
 
+        # X: Hold to force MegaTag1 (works in disabled + enabled)
+        self._joystick_1.x().whileTrue(
+            cmd.startEnd(
+                lambda: self.limelight.set_megatag2(False),
+                lambda: self.limelight.set_megatag2(True),
+            ).ignoringDisable(True)
+        )
+
         # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
         self.hood = HoodSubSystem()
@@ -131,7 +140,7 @@ class RobotContainer:
             "hubshot",
             HubShot(
                 self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-            ).finallyDo(lambda interrupted: self._clearout_command().schedule()),
+            ),
         )
 
         # ── Event Triggers (for zoned event markers on paths) ──
@@ -157,19 +166,6 @@ class RobotContainer:
         # self.configureTuningTestBindings()
         # self.configureManualBindings()
         self.configureCompetitionBindings()
-
-    def _clearout_command(self):
-        """Reverse conveyor while shooter+kicker keep running, then stop."""
-        return cmd.run(
-            lambda: (
-                self.shooter.set_target_speed(self._virtual_goal.last_rpm),
-                self.kicker.set_duty_cycle(1.0),
-                self.indexer.set_target_output(-1.0),
-            ),
-            self.shooter,
-            self.kicker,
-            self.indexer,
-        ).withTimeout(0.5)
 
     def _drive_or_brake(self):
         """Swerve request: drive from joystick input, or brake when sticks are idle."""
@@ -230,16 +226,13 @@ class RobotContainer:
           B  (hold)    = Kicker (duty cycle)
           RB (hold)    = Conveyor (duty cycle)
           RT (hold)    = Intake roller (duty cycle)
-          LT (hold)    = Intake arm (duty cycle)
-          A  (hold)    = Hood up (duty cycle)
-          X  (hold)    = Hood down (duty cycle)
           Start        = Home hood
           Back         = Home intake arm
           LB           = (reserved)
-          POV Up       = Set hood max limit
-          POV Down     = Set hood min limit
-          POV Right    = Set intake max limit
-          POV Left     = Set intake min limit
+          POV Up       = Hood up (duty cycle)
+          POV Down     = Hood down (duty cycle)
+          POV Right    = Intake arm up (duty cycle)
+          POV Left     = Intake arm down (duty cycle)
 
         Hood and intake arm track HWTest/ NT positions as default commands.
         """
@@ -309,33 +302,6 @@ class RobotContainer:
             )
         )
 
-        # LT: Hold to run intake arm at NT-tunable duty cycle
-        self._joystick_1.leftTrigger().whileTrue(
-            cmd.runEnd(
-                lambda: self.intake.set_arm_duty_cycle(arm_output_sub.get()),
-                lambda: self.intake.set_arm_duty_cycle(0),
-                self.intake,
-            )
-        )
-
-        # A: Hold to drive hood up (positive duty cycle), hold position on release
-        self._joystick_1.a().whileTrue(
-            cmd.runEnd(
-                lambda: self.hood.set_duty_cycle(hood_output_sub.get()),
-                lambda: hood_pos_pub.set(self.hood.get_current_position()),
-                self.hood,
-            )
-        )
-
-        # X: Hold to drive hood down (negative duty cycle), hold position on release
-        self._joystick_1.x().whileTrue(
-            cmd.runEnd(
-                lambda: self.hood.set_duty_cycle(-hood_output_sub.get()),
-                lambda: hood_pos_pub.set(self.hood.get_current_position()),
-                self.hood,
-            )
-        )
-
         # ── Homing ────────────────────────────────────────────────
 
         # Start: Home hood, then move to min soft limit
@@ -354,24 +320,42 @@ class RobotContainer:
             )
         )
 
-        # ── Limit calibration (POV — one-shot) ────────────────────
+        # ── POV — hood and intake arm duty cycle ──────────────────
 
-        # POV Up: Set hood max limit at current position
-        self._joystick_1.povUp().onTrue(cmd.runOnce(self.hood.set_max_limit, self.hood))
-
-        # POV Down: Set hood min limit at current position
-        self._joystick_1.povDown().onTrue(
-            cmd.runOnce(self.hood.set_min_limit, self.hood)
+        # POV Up: Hold to drive hood up, hold position on release
+        self._joystick_1.povUp().whileTrue(
+            cmd.runEnd(
+                lambda: self.hood.set_duty_cycle(hood_output_sub.get()),
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
+                self.hood,
+            )
         )
 
-        # POV Right: Set intake max limit at current position
-        self._joystick_1.povRight().onTrue(
-            cmd.runOnce(self.intake.set_max_limit, self.intake)
+        # POV Down: Hold to drive hood down, hold position on release
+        self._joystick_1.povDown().whileTrue(
+            cmd.runEnd(
+                lambda: self.hood.set_duty_cycle(-hood_output_sub.get()),
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
+                self.hood,
+            )
         )
 
-        # POV Left: Set intake min limit at current position
-        self._joystick_1.povLeft().onTrue(
-            cmd.runOnce(self.intake.set_min_limit, self.intake)
+        # POV Right: Hold to drive intake arm up
+        self._joystick_1.povRight().whileTrue(
+            cmd.runEnd(
+                lambda: self.intake.set_arm_duty_cycle(arm_output_sub.get()),
+                lambda: arm_pos_pub.set(self.intake.get_arm_position()),
+                self.intake,
+            )
+        )
+
+        # POV Left: Hold to drive intake arm down
+        self._joystick_1.povLeft().whileTrue(
+            cmd.runEnd(
+                lambda: self.intake.set_arm_duty_cycle(-arm_output_sub.get()),
+                lambda: arm_pos_pub.set(self.intake.get_arm_position()),
+                self.intake,
+            )
         )
 
         # ── Default commands — track NT positions after homing, stop if not homed ─
@@ -531,8 +515,7 @@ class RobotContainer:
             )
         )
 
-        # RT release: clearout — reverse conveyor, keep shooter+kicker for 1s
-        self._joystick_1.rightTrigger().onFalse(self._clearout_command())
+
 
         # LT: Hold to deploy intake arm + spin rollers (speed limited)
         _INTAKE_DRIVE_SCALE = 0.25  # Limit swerve to 50% while intaking  # TUNE
@@ -567,6 +550,11 @@ class RobotContainer:
                 ),
                 self.drivetrain.apply_request(_intake_drive_request),
             )
+        )
+
+        # B: Hold to dump shot (fixed hood max + 2800 RPM)
+        self._joystick_1.b().whileTrue(
+            DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
         )
 
         # Y: Stow intake arm
