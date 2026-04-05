@@ -5,7 +5,7 @@ from subsystems.indexer import IndexerSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 
-CLEAROUT_S = 0.5
+CLEAROUT_S = 0.25
 
 
 class Clearout(Command):

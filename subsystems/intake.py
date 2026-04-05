@@ -17,7 +17,7 @@ POSITION_STALL_CURRENT = 10.0  # Amps  # TUNE
 POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
-DEPLOY_DUTYCYCLE = 0.30  # Duty cycle holding arm against deployed hard stop  # TUNE
+DEPLOY_DUTYCYCLE = 0.35  # Duty cycle holding arm against deployed hard stop  # TUNE
 STOW_POSITION = -30.0  # Retracted/stowed position in motor turns
 
 # PID defaults (slot 0 — position)
@@ -81,7 +81,7 @@ class IntakeSubSystem(Subsystem):
 
         # Roller config — velocity controlled, coast mode
         roller_config = rev.SparkBaseConfig()
-        roller_config.voltageCompensation(10)
+        roller_config.voltageCompensation(10.5)
         roller_config.smartCurrentLimit(30)
         roller_config.secondaryCurrentLimit(40)
         roller_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)

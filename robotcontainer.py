@@ -18,10 +18,10 @@ from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 
-# from subsystems.climb import ClimbSubsystem
-# from commands.climb_commands import ExtendClimb, RetractClimb
-from commands.auto_home import AutoHome
 from commands.dump_shot import DumpShot
+from subsystems.climb import ClimbSubsystem
+from commands.climb_commands import ExtendClimb, RetractClimb
+from commands.auto_home import AutoHome
 from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
 from commands.auto_tune_kicker import AutoTuneKickerCommand
@@ -96,6 +96,7 @@ class RobotContainer:
         self._logger = Telemetry(self._max_speed)
 
         self._joystick_1 = CommandXboxController(0)
+        self._joystick_2 = CommandXboxController(1)
 
         self.drivetrain = TunerConstants.create_drivetrain()
         self._virtual_goal = VirtualGoal(self.drivetrain)
@@ -103,15 +104,7 @@ class RobotContainer:
         # Add vision
         self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
 
-        # X: Hold to force MegaTag1 (works in disabled + enabled)
-        self._joystick_1.x().whileTrue(
-            cmd.startEnd(
-                lambda: self.limelight.set_megatag2(False),
-                lambda: self.limelight.set_megatag2(True),
-            ).ignoringDisable(True)
-        )
-
-        # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
+        self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
         self.hood = HoodSubSystem()
         self.intake = IntakeSubSystem()
@@ -166,6 +159,7 @@ class RobotContainer:
         # self.configureTuningTestBindings()
         # self.configureManualBindings()
         self.configureCompetitionBindings()
+
 
     def _drive_or_brake(self):
         """Swerve request: drive from joystick input, or brake when sticks are idle."""
@@ -226,13 +220,16 @@ class RobotContainer:
           B  (hold)    = Kicker (duty cycle)
           RB (hold)    = Conveyor (duty cycle)
           RT (hold)    = Intake roller (duty cycle)
+          LT (hold)    = Intake arm (duty cycle)
+          A  (hold)    = Hood up (duty cycle)
+          X  (hold)    = Hood down (duty cycle)
           Start        = Home hood
           Back         = Home intake arm
           LB           = (reserved)
-          POV Up       = Hood up (duty cycle)
-          POV Down     = Hood down (duty cycle)
-          POV Right    = Intake arm up (duty cycle)
-          POV Left     = Intake arm down (duty cycle)
+          POV Up       = Set hood max limit
+          POV Down     = Set hood min limit
+          POV Right    = Set intake max limit
+          POV Left     = Set intake min limit
 
         Hood and intake arm track HWTest/ NT positions as default commands.
         """
@@ -302,6 +299,33 @@ class RobotContainer:
             )
         )
 
+        # LT: Hold to run intake arm at NT-tunable duty cycle
+        self._joystick_1.leftTrigger().whileTrue(
+            cmd.runEnd(
+                lambda: self.intake.set_arm_duty_cycle(arm_output_sub.get()),
+                lambda: self.intake.set_arm_duty_cycle(0),
+                self.intake,
+            )
+        )
+
+        # A: Hold to drive hood up (positive duty cycle), hold position on release
+        self._joystick_1.a().whileTrue(
+            cmd.runEnd(
+                lambda: self.hood.set_duty_cycle(hood_output_sub.get()),
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
+                self.hood,
+            )
+        )
+
+        # X: Hold to drive hood down (negative duty cycle), hold position on release
+        self._joystick_1.x().whileTrue(
+            cmd.runEnd(
+                lambda: self.hood.set_duty_cycle(-hood_output_sub.get()),
+                lambda: hood_pos_pub.set(self.hood.get_current_position()),
+                self.hood,
+            )
+        )
+
         # ── Homing ────────────────────────────────────────────────
 
         # Start: Home hood, then move to min soft limit
@@ -320,42 +344,24 @@ class RobotContainer:
             )
         )
 
-        # ── POV — hood and intake arm duty cycle ──────────────────
+        # ── Limit calibration (POV — one-shot) ────────────────────
 
-        # POV Up: Hold to drive hood up, hold position on release
-        self._joystick_1.povUp().whileTrue(
-            cmd.runEnd(
-                lambda: self.hood.set_duty_cycle(hood_output_sub.get()),
-                lambda: hood_pos_pub.set(self.hood.get_current_position()),
-                self.hood,
-            )
+        # POV Up: Set hood max limit at current position
+        self._joystick_1.povUp().onTrue(cmd.runOnce(self.hood.set_max_limit, self.hood))
+
+        # POV Down: Set hood min limit at current position
+        self._joystick_1.povDown().onTrue(
+            cmd.runOnce(self.hood.set_min_limit, self.hood)
         )
 
-        # POV Down: Hold to drive hood down, hold position on release
-        self._joystick_1.povDown().whileTrue(
-            cmd.runEnd(
-                lambda: self.hood.set_duty_cycle(-hood_output_sub.get()),
-                lambda: hood_pos_pub.set(self.hood.get_current_position()),
-                self.hood,
-            )
+        # POV Right: Set intake max limit at current position
+        self._joystick_1.povRight().onTrue(
+            cmd.runOnce(self.intake.set_max_limit, self.intake)
         )
 
-        # POV Right: Hold to drive intake arm up
-        self._joystick_1.povRight().whileTrue(
-            cmd.runEnd(
-                lambda: self.intake.set_arm_duty_cycle(arm_output_sub.get()),
-                lambda: arm_pos_pub.set(self.intake.get_arm_position()),
-                self.intake,
-            )
-        )
-
-        # POV Left: Hold to drive intake arm down
-        self._joystick_1.povLeft().whileTrue(
-            cmd.runEnd(
-                lambda: self.intake.set_arm_duty_cycle(-arm_output_sub.get()),
-                lambda: arm_pos_pub.set(self.intake.get_arm_position()),
-                self.intake,
-            )
+        # POV Left: Set intake min limit at current position
+        self._joystick_1.povLeft().onTrue(
+            cmd.runOnce(self.intake.set_min_limit, self.intake)
         )
 
         # ── Default commands — track NT positions after homing, stop if not homed ─
@@ -491,6 +497,8 @@ class RobotContainer:
             0.25  # Limit swerve to 25% while shooting to prevent brownouts
         )
 
+        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
+
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate_operator()
             return (
@@ -515,10 +523,8 @@ class RobotContainer:
             )
         )
 
-
-
         # LT: Hold to deploy intake arm + spin rollers (speed limited)
-        _INTAKE_DRIVE_SCALE = 0.25  # Limit swerve to 50% while intaking  # TUNE
+        _INTAKE_DRIVE_SCALE = 0.50  # Limit swerve to 50% while intaking  # TUNE
 
         def _intake_drive_request():
             return (
@@ -552,13 +558,13 @@ class RobotContainer:
             )
         )
 
-        # B: Hold to dump shot (fixed hood max + 2800 RPM)
-        self._joystick_1.b().whileTrue(
-            DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
-        )
-
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+
+        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
+
+
+        self._joystick_1.rightBumper().whileTrue(self._dump_shot)
 
         # RB: Home hood
         self._joystick_1.rightBumper().onTrue(
@@ -574,8 +580,27 @@ class RobotContainer:
         self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
 
         # Climb function — disabled until PCM is on CAN bus
-        # self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
-        # self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
+        self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
+        self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
+
+        # Joystick 2 bindings
+        # POV Up: Enable MegaTag2 while held
+        self._joystick_2.povUp().onTrue(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', True),
+                )
+            )
+        )
+        self._joystick_2.povUp().onFalse(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', False),
+                )
+            )
+        )
 
     def configureManualBindings(self):
         """
@@ -699,8 +724,12 @@ class RobotContainer:
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
 
+
+
+
+
         # RB: Home hood
-        self._joystick_1.rightBumper().onTrue(
+        self._joystick_2.rightBumper().onTrue(
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
 

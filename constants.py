@@ -35,4 +35,4 @@ class CANIds:
 
 class PneumaticChannels:
     # Climber solenoid on CTRE PCM
-    CLIMBER_SOLENOID = 2
+    CLIMBER_SOLENOID = 0
