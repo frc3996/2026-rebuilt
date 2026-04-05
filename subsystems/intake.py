@@ -17,7 +17,7 @@ POSITION_STALL_CURRENT = 10.0  # Amps  # TUNE
 POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
-DEPLOY_DUTYCYCLE = 0.30  # Duty cycle holding arm against deployed hard stop  # TUNE
+DEPLOY_DUTYCYCLE = 0.35  # Duty cycle holding arm against deployed hard stop  # TUNE
 STOW_POSITION = -30.0  # Retracted/stowed position in motor turns
 
 # PID defaults (slot 0 — position)

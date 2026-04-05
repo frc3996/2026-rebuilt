@@ -578,6 +578,17 @@ class RobotContainer:
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
 
+        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
+
+
+        self._joystick_1.rightBumper().whileTrue(
+            SequentialCommandGroup(self._clearout_command(),
+                ParallelCommandGroup(
+                    self._dump_shot,
+                )
+            )
+        )
+
         # RB: Home hood
         self._joystick_1.rightBumper().onTrue(
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
@@ -735,16 +746,7 @@ class RobotContainer:
 
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
-        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
 
-
-        self._joystick_1.rightBumper().whileTrue(
-            SequentialCommandGroup(self._clearout_command(),
-                ParallelCommandGroup(
-                    self._dump_shot,
-                )
-            )
-        )
         self._joystick_1.rightBumper().onFalse(self._clearout_command())
 
 
