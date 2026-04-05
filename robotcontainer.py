@@ -7,7 +7,7 @@
 import math
 
 import commands2
-from commands2 import ParallelCommandGroup, cmd
+from commands2 import ParallelCommandGroup, SequentialCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
 from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
@@ -546,13 +546,23 @@ class RobotContainer:
 
         self._joystick_1.leftTrigger().whileTrue(
             ParallelCommandGroup(
-                cmd.runEnd(
-                    lambda: (
-                        self.intake.deploy(),
-                        self.intake.set_roller_duty_cycle(1.0),
-                    ),
-                    lambda: self.intake.set_roller_duty_cycle(0),
-                    self.intake,
+                SequentialCommandGroup(
+                    cmd.runEnd(
+                        lambda: (
+                            self.intake.fast_deploy(),
+                            self.intake.set_roller_duty_cycle(1.0),
+                        ),
+                        lambda: self.intake.set_roller_duty_cycle(0),
+                        self.intake,
+                    ).withTimeout(0.1),
+                    cmd.runEnd(
+                        lambda: (
+                            self.intake.deploy(),
+                            self.intake.set_roller_duty_cycle(1.0),
+                        ),
+                        lambda: self.intake.set_roller_duty_cycle(0),
+                        self.intake,
+                    )
                 ),
                 self.drivetrain.apply_request(_intake_drive_request),
             )

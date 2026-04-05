@@ -17,6 +17,7 @@ POSITION_STALL_CURRENT = 10.0  # Amps  # TUNE
 POSITION_STALL_VELOCITY = 10.0  # RPM  # TUNE
 POSITION_STALL_CYCLES = 10  # ~200ms at 20ms loop  # TUNE
 
+FAST_DEPLOY_DUTYCYCLE = 0.6  # Duty cycle holding arm against deployed hard stop  # TUNE
 DEPLOY_DUTYCYCLE = 0.35  # Duty cycle holding arm against deployed hard stop  # TUNE
 STOW_POSITION = -30.0  # Retracted/stowed position in motor turns
 
@@ -169,6 +170,12 @@ class IntakeSubSystem(Subsystem):
             rev.SparkBase.ControlType.kPosition,
             rev.ClosedLoopSlot.kSlot0,
         )
+
+    def fast_deploy(self) -> None:
+        """Hold arm against deployed hard stop with a gentle duty cycle."""
+        speed = DEPLOY_DUTYCYCLE if self.homed is False else FAST_DEPLOY_DUTYCYCLE
+        self._arm_position_active = False
+        self._arm_motor.set(speed)
 
     def deploy(self) -> None:
         """Hold arm against deployed hard stop with a gentle duty cycle."""
