@@ -30,12 +30,11 @@ from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
 from commands.hub_shot import HubShot, VirtualGoal
-from commands.safe_retract_intake import SafeRetractIntake
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
-from subsystems.intake import IntakeSubSystem
+from subsystems.intake import DEPLOY_POSITION, STOW_POSITION, IntakeSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import CAMERAS, VisionSubsystem
@@ -354,16 +353,6 @@ class RobotContainer:
             cmd.runOnce(self.hood.set_min_limit, self.hood)
         )
 
-        # POV Right: Set intake max limit at current position
-        self._joystick_1.povRight().onTrue(
-            cmd.runOnce(self.intake.set_max_limit, self.intake)
-        )
-
-        # POV Left: Set intake min limit at current position
-        self._joystick_1.povLeft().onTrue(
-            cmd.runOnce(self.intake.set_min_limit, self.intake)
-        )
-
         # ── Default commands — track NT positions after homing, stop if not homed ─
 
         self.hood.setDefaultCommand(
@@ -377,11 +366,7 @@ class RobotContainer:
         )
         self.intake.setDefaultCommand(
             self.intake.run(
-                lambda: (
-                    self.intake.set_arm_target_position(arm_pos_sub.get())
-                    if self.intake.homed
-                    else self.intake.stop_arm()
-                )
+                lambda: self.intake.set_arm_target_position(arm_pos_sub.get())
             )
         )
 
@@ -415,18 +400,14 @@ class RobotContainer:
 
         self.hood.setDefaultCommand(self.hood.run(_hood_from_stick))
 
-        # Right stick Y: intake arm — stick up=deployed (min), stick down=stowed (max)
+        # Right stick Y: intake arm — stick up=deployed, stick down=stowed
         def _intake_from_stick():
-            if not self.intake.homed:
-                return
             raw = -self._joystick_1.getRightY()  # 0..1 when pushed up
             t = max(0.0, raw)
             if t < 0.05:
                 self.intake.hold()
                 return
-            pos = self.intake.max_rotations + t * (
-                self.intake.min_rotations - self.intake.max_rotations
-            )
+            pos = STOW_POSITION + t * (DEPLOY_POSITION - STOW_POSITION)
             self.intake.set_arm_target_position(pos)
 
         self.intake.setDefaultCommand(self.intake.run(_intake_from_stick))
@@ -561,9 +542,9 @@ class RobotContainer:
         )
 
         # Y: Stow intake arm
-        self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
-        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_2.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
 
         self._joystick_1.rightBumper().whileTrue(self._dump_shot)
@@ -719,7 +700,7 @@ class RobotContainer:
         )
 
         # Y: Stow intake arm
-        self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
 
 

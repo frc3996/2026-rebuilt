@@ -1,30 +1,18 @@
 import ntcore
 import rev
 from commands2 import Subsystem
-from wpilib import Timer
 
 from constants import NEO_FREE_SPEED_RPM, CANIds
 
-# Homing constants
-HOMING_DUTYCYCLE = 0.15  # Duty cycle toward deployed hard stop (positive)  # TUNE
-HOMING_STARTUP_SECONDS = 0.5  # Grace period before stall detection  # TUNE
-STALL_CURRENT_THRESHOLD = 19.0  # Amps — free ~17A, stall >20A  # TUNE
-STALL_VELOCITY_THRESHOLD = 5.0  # RPM  # TUNE
-STALL_CONFIRM_CYCLES = 10  # Consecutive loops (~200ms at 20ms loop)
-HOMING_TIMEOUT_SECONDS = 5.0
+# Arm positions — absolute encoder reads 0‥1 turns
+DEPLOY_POSITION = 0.540  # Fully deployed  # TUNE
+STOW_POSITION = 0.9  # Retracted/stowed  # TUNE
 
-# Stall protection — applies to all arm movement (position control + duty cycle)
-STALL_CURRENT = 10.0  # Amps  # TUNE
-STALL_VELOCITY = 10.0  # RPM  # TUNE
-STALL_CYCLES = 5  # ~100ms at 20ms loop  # TUNE
+# Position tolerance — "at target" threshold (absolute encoder turns)
+POSITION_TOLERANCE = 0.02  # TUNE
 
-DEPLOY_STARTUP_DUTYCYCLE = 0.20  # Gentle duty cycle during grace period  # TUNE
-DEPLOY_STARTUP_SECONDS = 0.3  # Grace period before full duty cycle  # TUNE
-DEPLOY_DUTYCYCLE = 0.60  # Duty cycle toward deployed hard stop  # TUNE
-STOW_POSITION = -30.0  # Retracted/stowed position in motor turns
-
-# PID defaults (slot 0 — position)
-ARM_KP = 0.092
+# PID defaults (slot 0 — position, feedback from absolute encoder)
+ARM_KP = 1
 ARM_KI = 0.0
 ARM_KD = 0.002
 
@@ -32,56 +20,51 @@ ARM_KD = 0.002
 class IntakeSubSystem(Subsystem):
     """
     Intake subsystem — deployable arm with roller for game piece pickup.
-    Arm must be homed against deployed hard stop before position control is valid.
-    Soft limits are set by manually driving to each end and calling
-    set_min_limit() / set_max_limit().
+    Uses an absolute encoder on the SparkMax data port for PID position
+    control.  Two positions: DEPLOY_POSITION and STOW_POSITION.
+    No homing required.
     """
 
     def __init__(self) -> None:
         super().__init__()
+        # ── Arm motor + absolute encoder ───────────────────────────
         self._arm_motor = rev.SparkMax(
             CANIds.INTAKE_ARM, rev.SparkMax.MotorType.kBrushless
         )
-        self._arm_encoder = self._arm_motor.getEncoder()
+        self._arm_encoder = self._arm_motor.getAbsoluteEncoder()
         self._arm_closed_loop = self._arm_motor.getClosedLoopController()
-        self.homed: bool = False
-        self.limits_set: bool = True
 
-        # Rotation limits — set via set_min_limit / set_max_limit
-        self.min_rotations: float = -38.0
-        self.max_rotations: float = -2.0  # clear of deployed hard stop
-
+        # ── Roller motor ───────────────────────────────────────────
         self._roller_motor = rev.SparkMax(
             CANIds.INTAKE_ROLLER, rev.SparkMax.MotorType.kBrushless
         )
         self._roller_encoder = self._roller_motor.getEncoder()
         self._roller_closed_loop = self._roller_motor.getClosedLoopController()
 
-        # Arm config — position controlled, brake mode
-        self._arm_config = rev.SparkBaseConfig()
-        self._arm_config.inverted(True)  # positive = toward stow (retract)
+        # ── Arm config ─────────────────────────────────────────────
+        self._arm_config = rev.SparkMaxConfig()
+        self._arm_config.inverted(False)
         self._arm_config.voltageCompensation(10)
         self._arm_config.smartCurrentLimit(15)
         self._arm_config.secondaryCurrentLimit(20)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
+        # Absolute encoder on the data port
+        self._arm_config.absoluteEncoder.setSparkMaxDataPortConfig()
+        # PID feedback from absolute encoder
         self._arm_config.closedLoop.setFeedbackSensor(
-            rev.FeedbackSensor.kPrimaryEncoder
+            rev.FeedbackSensor.kAbsoluteEncoder
         )
         self._arm_config.closedLoop.P(ARM_KP, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.I(ARM_KI, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.D(ARM_KD, rev.ClosedLoopSlot.kSlot0)
         self._arm_config.closedLoop.outputRange(-1, 1, rev.ClosedLoopSlot.kSlot0)
-        self._arm_config.softLimit.forwardSoftLimit(self.max_rotations)
-        self._arm_config.softLimit.forwardSoftLimitEnabled(True)
-        self._arm_config.softLimit.reverseSoftLimit(self.min_rotations)
-        self._arm_config.softLimit.reverseSoftLimitEnabled(True)
         self._arm_motor.configure(
             self._arm_config,
             rev.ResetMode.kResetSafeParameters,
             rev.PersistMode.kPersistParameters,
         )
 
-        # Roller config — velocity controlled, coast mode
+        # ── Roller config ─────────────────────────────────────────
         roller_config = rev.SparkBaseConfig()
         roller_config.voltageCompensation(10.5)
         roller_config.smartCurrentLimit(30)
@@ -101,43 +84,28 @@ class IntakeSubSystem(Subsystem):
             rev.PersistMode.kPersistParameters,
         )
 
+        # ── State ─────────────────────────────────────────────────
         self._arm_target: float = 0.0
         self._roller_target: float = 0.0
-        self._arm_active: bool = False  # True when arm is being driven (position or duty cycle)
-        self._deploying: bool = False  # True specifically during deploy()
-        self._deploy_timer = Timer()
-        self._deploy_ramped: bool = False  # True once past grace period
-        self._stall_cycle: int = 0
-        self._stall_count: int = 0
-        self._stalled: bool = False
 
+        # ── NetworkTables telemetry ────────────────────────────────
         table = ntcore.NetworkTableInstance.getDefault().getTable("Intake")
         self._arm_amps_pub = table.getDoubleTopic("Arm Amps").publish()
         self._arm_position_pub = table.getDoubleTopic("Arm Position Turns").publish()
         self._arm_target_pub = table.getDoubleTopic("Arm Target Turns").publish()
         self._arm_velocity_pub = table.getDoubleTopic("Arm Velocity RPM").publish()
-        self._arm_homed_pub = table.getBooleanTopic("Arm Homed").publish()
-        self._arm_stall_cycle_pub = table.getIntegerTopic("Arm Stall Cycle").publish()
-        self._arm_stall_count_pub = table.getIntegerTopic("Arm Stall Count").publish()
-        self._arm_limits_set_pub = table.getBooleanTopic("Arm Limits Set").publish()
         self._roller_velocity_pub = table.getDoubleTopic(
             "Roller Velocity RPM"
         ).publish()
         self._roller_target_pub = table.getDoubleTopic("Roller Target RPM").publish()
         self._roller_amps_pub = table.getDoubleTopic("Roller Amps").publish()
 
-    # ── Low-level arm motor access (for homing / auto-tune commands) ──
+    # ── Low-level arm motor access (for auto-tune) ─────────────────
 
     def set_arm_duty_cycle(self, output: float) -> None:
-        self._arm_active = True
-        self._deploying = False
-        self._stalled = False
-        self._stall_cycle = 0
         self._arm_motor.set(output)
 
     def stop_arm(self) -> None:
-        self._arm_active = False
-        self._deploying = False
         self._arm_motor.stopMotor()
 
     def get_arm_current(self) -> float:
@@ -148,11 +116,6 @@ class IntakeSubSystem(Subsystem):
 
     def get_arm_position(self) -> float:
         return self._arm_encoder.getPosition()
-
-    def reset_arm_encoder(self) -> None:
-        """Zero the arm encoder and mark homed."""
-        self._arm_encoder.setPosition(0.0)
-        self.homed = True
 
     def set_arm_pid_gains(self, kp: float, ki: float, kd: float) -> None:
         """Update arm position PID gains (slot 0) at runtime."""
@@ -165,20 +128,11 @@ class IntakeSubSystem(Subsystem):
             rev.PersistMode.kNoPersistParameters,
         )
 
-    # ── Arm control ────────────────────────────────────────────────
+    # ── Arm position control ───────────────────────────────────────
 
     def set_arm_target_position(self, target_position: float) -> None:
-        """Drive arm to a position in motor turns (requires homing)."""
-        if not self.homed:
-            return
-        target_position = max(
-            self.min_rotations, min(target_position, self.max_rotations)
-        )
+        """Command arm to a position (absolute encoder turns) via on-controller PID."""
         self._arm_target = target_position
-        self._arm_active = True
-        self._deploying = False
-        self._stalled = False
-        self._stall_cycle = 0
         self._arm_closed_loop.setReference(
             target_position,
             rev.SparkBase.ControlType.kPosition,
@@ -186,63 +140,31 @@ class IntakeSubSystem(Subsystem):
         )
 
     def deploy(self) -> None:
-        """Drive arm toward deployed hard stop. Starts at low duty cycle, ramps up after grace period."""
-        if not self._deploying:
-            self._arm_active = True
-            self._deploying = True
-            self._deploy_ramped = False
-            self._stalled = False
-            self._stall_cycle = 0
-            self._deploy_timer.restart()
-            self._arm_motor.set(DEPLOY_STARTUP_DUTYCYCLE)
-        elif not self._deploy_ramped and self._deploy_timer.hasElapsed(DEPLOY_STARTUP_SECONDS):
-            self._deploy_ramped = True
-            self._arm_motor.set(DEPLOY_DUTYCYCLE)
+        """Move arm to DEPLOY_POSITION."""
+        self.set_arm_target_position(DEPLOY_POSITION)
 
-    # ── Soft limit calibration ─────────────────────────────────────
+    def stow(self) -> None:
+        """Move arm to STOW_POSITION and stop roller."""
+        self.set_arm_target_position(STOW_POSITION)
+        self.set_roller_target_speed(0)
 
-    def _apply_soft_limits(self) -> None:
-        """Push current soft limit values to the motor controller."""
-        self._arm_config.softLimit.forwardSoftLimit(self.max_rotations)
-        self._arm_config.softLimit.forwardSoftLimitEnabled(True)
-        self._arm_config.softLimit.reverseSoftLimit(self.min_rotations)
-        self._arm_config.softLimit.reverseSoftLimitEnabled(True)
-        self._arm_motor.configure(
-            self._arm_config,
-            rev.ResetMode.kNoResetSafeParameters,
-            rev.PersistMode.kNoPersistParameters,
-        )
+    def is_at_position(self, target: float) -> bool:
+        """True when arm is within POSITION_TOLERANCE of *target*."""
+        return abs(self.get_arm_position() - target) < POSITION_TOLERANCE
 
-    def set_min_limit(self) -> None:
-        """Record current position as the reverse (min) soft limit."""
-        self.min_rotations = self._arm_encoder.getPosition()
-        self._apply_soft_limits()
-        self.limits_set = self.limits_set or (self.max_rotations != self.min_rotations)
+    @property
+    def is_deployed(self) -> bool:
+        return self.is_at_position(DEPLOY_POSITION)
 
-    def set_max_limit(self) -> None:
-        """Record current position as the forward (max) soft limit."""
-        self.max_rotations = self._arm_encoder.getPosition()
-        self._apply_soft_limits()
-        self.limits_set = self.limits_set or (self.max_rotations != self.min_rotations)
+    @property
+    def is_stowed(self) -> bool:
+        return self.is_at_position(STOW_POSITION)
 
     # ── Default actions ────────────────────────────────────────────
 
-    @property
-    def is_stalled(self) -> bool:
-        """True when the arm has stalled during any movement."""
-        return self._stalled
-
     def hold(self) -> None:
-        """Stop roller. Arm does nothing (brake mode holds position)."""
+        """Stop roller. Arm holds via brake mode."""
         self._roller_motor.stopMotor()
-
-    def stow(self) -> None:
-        """Move arm to stow position if homed, otherwise stop. Also stops roller."""
-        if self.homed:
-            self.set_arm_target_position(STOW_POSITION)
-        else:
-            self._arm_motor.stopMotor()
-        self.set_roller_target_speed(0)
 
     # ── Roller control ─────────────────────────────────────────────
 
@@ -260,40 +182,10 @@ class IntakeSubSystem(Subsystem):
     # ── Periodic ───────────────────────────────────────────────────
 
     def periodic(self) -> None:
-        arm_current = self._arm_motor.getOutputCurrent()
-        arm_velocity = abs(self._arm_encoder.getVelocity())
-        arm_position = self._arm_encoder.getPosition()
-
-        # Auto-update home: if arm travels past 0 (deployed hard stop), reset encoder
-        if self.homed and arm_position > 0:
-            self._arm_encoder.setPosition(0.0)
-
-        # Stall detection — applies to all arm movement (skip deploy grace period)
-        if self._arm_active and not (self._deploying and not self._deploy_ramped):
-            if arm_current > STALL_CURRENT and arm_velocity < STALL_VELOCITY:
-                self._stall_cycle += 1
-            else:
-                self._stall_cycle = 0
-            if self._stall_cycle >= STALL_CYCLES:
-                self._stall_count += 1
-                self._stall_cycle = 0
-                self._arm_active = False
-                self._stalled = True
-                self._arm_motor.stopMotor()
-                # Deploy stall = arm hit the hard stop → re-zero encoder, mark homed
-                if self._deploying:
-                    self._arm_encoder.setPosition(0.0)
-                    self.homed = True
-                    self._deploying = False
-
-        self._arm_amps_pub.set(arm_current)
+        self._arm_amps_pub.set(self._arm_motor.getOutputCurrent())
         self._arm_position_pub.set(self._arm_encoder.getPosition())
         self._arm_target_pub.set(self._arm_target)
         self._arm_velocity_pub.set(self._arm_encoder.getVelocity())
-        self._arm_homed_pub.set(self.homed)
-        self._arm_stall_cycle_pub.set(self._stall_cycle)
-        self._arm_stall_count_pub.set(self._stall_count)
-        self._arm_limits_set_pub.set(self.limits_set)
         self._roller_velocity_pub.set(self._roller_encoder.getVelocity())
         self._roller_target_pub.set(self._roller_target)
         self._roller_amps_pub.set(self._roller_motor.getOutputCurrent())

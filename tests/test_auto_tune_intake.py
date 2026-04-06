@@ -10,10 +10,6 @@ from commands.auto_tune_intake import RELAY_OUTPUT, REQUIRED_CROSSINGS, AutoTune
 @pytest.fixture
 def intake():
     i = MagicMock()
-    i.homed = True
-    i.limits_set = True
-    i.min_rotations = -4.0
-    i.max_rotations = 0.0
     return i
 
 
