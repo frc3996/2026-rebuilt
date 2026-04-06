@@ -18,7 +18,8 @@ from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
 
-from commands.dump_shot import DumpShot
+from commands.clearout import Clearout
+from commands.dump_shot import DUMP_RPM, DumpShot
 from subsystems.climb import ClimbSubsystem
 from commands.climb_commands import ExtendClimb, RetractClimb
 from commands.auto_home import AutoHome
@@ -133,7 +134,9 @@ class RobotContainer:
             "hubshot",
             HubShot(
                 self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-            ),
+            ).finallyDo(lambda interrupted: Clearout(
+                self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
+            ).schedule()),
         )
 
         # ── Event Triggers (for zoned event markers on paths) ──
@@ -492,12 +495,18 @@ class RobotContainer:
         # RT: Hold to aim at hub + shoot (auto RPM + hood from lookup table)
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-        )
+        ).finallyDo(lambda interrupted: Clearout(
+            self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
+        ).schedule())
         _SHOOT_DRIVE_SCALE = (
             0.25  # Limit swerve to 25% while shooting to prevent brownouts
         )
 
-        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
+        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood).finallyDo(
+            lambda interrupted: Clearout(
+                self.shooter, self.kicker, self.indexer, DUMP_RPM
+            ).schedule()
+        )
 
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate_operator()
@@ -576,15 +585,15 @@ class RobotContainer:
 
         self._joystick_1.rightBumper().whileTrue(self._dump_shot)
 
-        # RB: Home hood
-        self._joystick_1.rightBumper().onTrue(
-            HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
+        # # RB: Home hood
+        # self._joystick_1.rightBumper().onTrue(
+        #     HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
+        # )
 
-        # LB: Home intake arm
-        self._joystick_1.leftBumper().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
+        # # LB: Home intake arm
+        # self._joystick_1.leftBumper().onTrue(
+        #     HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
+        # )
 
         # Back: Re-home hood + intake
         self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))

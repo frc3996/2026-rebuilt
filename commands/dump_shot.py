@@ -1,7 +1,6 @@
 from commands2 import Command
 from wpilib import Timer
 
-from commands.clearout import Clearout
 from subsystems.hood import HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
 from subsystems.kicker import KickerSubSystem
@@ -47,7 +46,6 @@ class DumpShot(Command):
             self.indexer.stop()
 
     def end(self, interrupted: bool):
-        Clearout(self.shooter, self.kicker, self.indexer, DUMP_RPM).schedule()
         self.hood.stow()
 
     def isFinished(self) -> bool:
