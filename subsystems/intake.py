@@ -139,12 +139,6 @@ class IntakeSubSystem(Subsystem):
             rev.ClosedLoopSlot.kSlot0,
         )
 
-    def fast_deploy(self) -> None:
-        """Hold arm against deployed hard stop with a gentle duty cycle."""
-        speed = DEPLOY_DUTYCYCLE if self.homed is False else FAST_DEPLOY_DUTYCYCLE
-        self._arm_position_active = False
-        self._arm_motor.set(speed)
-
     def deploy(self) -> None:
         """Move arm to DEPLOY_POSITION."""
         self.set_arm_target_position(DEPLOY_POSITION)
