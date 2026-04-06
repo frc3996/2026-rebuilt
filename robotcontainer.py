@@ -29,7 +29,6 @@ from commands.auto_tune_kicker import AutoTuneKickerCommand
 from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
-from commands.home_intake import HomeIntake
 from commands.hub_shot import HubShot, VirtualGoal
 from commands.safe_retract_intake import SafeRetractIntake
 from commands.tune_shot import TuneShot
@@ -338,12 +337,10 @@ class RobotContainer:
             .finallyDo(lambda interrupted: hood_pos_pub.set(self.hood.min_rotations))
         )
 
-        # Back: Home intake arm, reset NT position regardless of outcome
+        # Back: Reset NT arm position
         self._joystick_1.back().onTrue(
-            HomeIntake(self.intake)
-            .withTimeout(HOMING_TIMEOUT_SECONDS)
-            .finallyDo(
-                lambda interrupted: arm_pos_pub.set(self.intake.get_arm_position())
+            cmd.runOnce(
+                lambda: arm_pos_pub.set(self.intake.get_arm_position())
             )
         )
 
@@ -438,10 +435,6 @@ class RobotContainer:
         self._joystick_1.leftBumper().onTrue(
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
-        self._joystick_1.rightBumper().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
-
         # Auto-tune (hood/intake use Z-N for position PID)
         self._joystick_1.start().onTrue(AutoTuneHoodCommand(self.hood))
         self._joystick_1.back().onTrue(AutoTuneIntakeCommand(self.intake))
@@ -580,13 +573,8 @@ class RobotContainer:
         #     HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         # )
 
-        # # LB: Home intake arm
-        # self._joystick_1.leftBumper().onTrue(
-        #     HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        # )
-
-        # Back: Re-home hood + intake
-        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
+        # Back: Re-home hood
+        self._joystick_1.back().onTrue(AutoHome(self.hood))
 
         # Climb function — disabled until PCM is on CAN bus
         self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
@@ -742,17 +730,12 @@ class RobotContainer:
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
 
-        # LB: Home intake arm
-        self._joystick_1.leftBumper().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
-
-        # Back: Re-home hood + intake
-        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
+        # Back: Re-home hood
+        self._joystick_1.back().onTrue(AutoHome(self.hood))
 
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""
-        return AutoHome(self.hood, self.intake)
+        return AutoHome(self.hood)
 
     def getAutonomousCommand(self) -> commands2.Command:
         """
