@@ -7,7 +7,7 @@
 import math
 
 import commands2
-from commands2 import ParallelCommandGroup, cmd
+from commands2 import ParallelCommandGroup, SequentialCommandGroup, cmd
 from commands2.button import CommandXboxController, Trigger
 from ntcore import NetworkTableInstance
 from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
@@ -132,9 +132,7 @@ class RobotContainer:
             "hubshot",
             HubShot(
                 self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-            ).finallyDo(lambda interrupted: Clearout(
-                self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
-            ).schedule()),
+            ),
         )
 
         # ── Event Triggers (for zoned event markers on paths) ──
@@ -331,9 +329,10 @@ class RobotContainer:
 
         # Start: Home hood, then move to min soft limit
         self._joystick_1.start().onTrue(
-            HomeHood(self.hood)
-            .withTimeout(HOMING_TIMEOUT_SECONDS)
-            .finallyDo(lambda interrupted: hood_pos_pub.set(self.hood.min_rotations))
+            SequentialCommandGroup(
+                HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS),
+                cmd.runOnce(lambda: hood_pos_pub.set(self.hood.min_rotations)),
+            )
         )
 
         # Back: Reset NT arm position
@@ -469,18 +468,12 @@ class RobotContainer:
         # RT: Hold to aim at hub + shoot (auto RPM + hood from lookup table)
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
-        ).finallyDo(lambda interrupted: Clearout(
-            self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
-        ).schedule())
+        )
         _SHOOT_DRIVE_SCALE = (
             0.25  # Limit swerve to 25% while shooting to prevent brownouts
         )
 
-        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood).finallyDo(
-            lambda interrupted: Clearout(
-                self.shooter, self.kicker, self.indexer, DUMP_RPM
-            ).schedule()
-        )
+        self._dump_shot = DumpShot(self.shooter, self.kicker, self.indexer, self.hood)
 
         def _hub_shot_request():
             aim, ff = self._virtual_goal.calculate_operator()
@@ -503,6 +496,12 @@ class RobotContainer:
             ParallelCommandGroup(
                 self._shoot_at_hub,
                 self.drivetrain.apply_request(_hub_shot_request),
+            )
+        )
+        # When RT is released, run Clearout to reverse indexer briefly
+        self._joystick_1.rightTrigger().onFalse(
+            Clearout(
+                self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
             )
         )
 
@@ -548,6 +547,10 @@ class RobotContainer:
 
 
         self._joystick_1.rightBumper().whileTrue(self._dump_shot)
+        # When RB is released, run Clearout to reverse indexer briefly
+        self._joystick_1.rightBumper().onFalse(
+            Clearout(self.shooter, self.kicker, self.indexer, DUMP_RPM)
+        )
 
         # # RB: Home hood
         # self._joystick_1.rightBumper().onTrue(
