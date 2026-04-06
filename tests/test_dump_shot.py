@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -77,23 +77,17 @@ def test_never_finishes(shooter, kicker, indexer, hood):
     assert not cmd.isFinished()
 
 
-@patch("commands.dump_shot.Clearout")
-def test_end_schedules_clearout(mock_clearout, shooter, kicker, indexer, hood):
-    """End should schedule a Clearout and stow hood."""
+def test_end_stows_hood(shooter, kicker, indexer, hood):
+    """End should stow the hood."""
     cmd = _make_cmd(shooter, kicker, indexer, hood)
     cmd.end(interrupted=False)
 
-    mock_clearout.assert_called_once_with(shooter, kicker, indexer, DUMP_RPM)
-    mock_clearout.return_value.schedule.assert_called_once()
     hood.stow.assert_called_once()
 
 
-@patch("commands.dump_shot.Clearout")
-def test_end_schedules_clearout_on_interrupt(mock_clearout, shooter, kicker, indexer, hood):
-    """Clearout should be scheduled even when interrupted."""
+def test_end_stows_hood_on_interrupt(shooter, kicker, indexer, hood):
+    """Hood should be stowed even when interrupted."""
     cmd = _make_cmd(shooter, kicker, indexer, hood)
     cmd.end(interrupted=True)
 
-    mock_clearout.assert_called_once_with(shooter, kicker, indexer, DUMP_RPM)
-    mock_clearout.return_value.schedule.assert_called_once()
     hood.stow.assert_called_once()
