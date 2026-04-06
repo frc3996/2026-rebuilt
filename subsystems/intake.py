@@ -5,16 +5,17 @@ from commands2 import Subsystem
 from constants import NEO_FREE_SPEED_RPM, CANIds
 
 # Arm positions — absolute encoder reads 0‥1 turns
-DEPLOY_POSITION = 0.540  # Fully deployed  # TUNE
-STOW_POSITION = 0.9  # Retracted/stowed  # TUNE
+DEPLOY_POSITION = 0.458  # Fully deployed  # TUNE
+STOW_POSITION = 0.219  # Retracted/stowed  # TUNE
+
 
 # Position tolerance — "at target" threshold (absolute encoder turns)
 POSITION_TOLERANCE = 0.02  # TUNE
 
 # PID defaults (slot 0 — position, feedback from absolute encoder)
-ARM_KP = 1
-ARM_KI = 0.0
-ARM_KD = 0.002
+ARM_KP = 4.8
+ARM_KI = 0
+ARM_KD = 0
 
 
 class IntakeSubSystem(Subsystem):
@@ -43,7 +44,7 @@ class IntakeSubSystem(Subsystem):
 
         # ── Arm config ─────────────────────────────────────────────
         self._arm_config = rev.SparkMaxConfig()
-        self._arm_config.inverted(False)
+        self._arm_config.inverted(True)
         self._arm_config.voltageCompensation(10)
         self._arm_config.smartCurrentLimit(15)
         self._arm_config.secondaryCurrentLimit(20)
@@ -100,6 +101,19 @@ class IntakeSubSystem(Subsystem):
         self._roller_target_pub = table.getDoubleTopic("Roller Target RPM").publish()
         self._roller_amps_pub = table.getDoubleTopic("Roller Amps").publish()
 
+        # ── NT-tunable PID gains ───────────────────────────────────
+        # Publish defaults so they appear in the dashboard immediately
+        table.getDoubleTopic("Arm kP").publish().set(ARM_KP)
+        table.getDoubleTopic("Arm kI").publish().set(ARM_KI)
+        table.getDoubleTopic("Arm kD").publish().set(ARM_KD)
+        self._arm_kp_sub = table.getDoubleTopic("Arm kP").subscribe(ARM_KP)
+        self._arm_ki_sub = table.getDoubleTopic("Arm kI").subscribe(ARM_KI)
+        self._arm_kd_sub = table.getDoubleTopic("Arm kD").subscribe(ARM_KD)
+        # Track last-applied values so we only flash the controller on change
+        self._last_kp = ARM_KP
+        self._last_ki = ARM_KI
+        self._last_kd = ARM_KD
+
     # ── Low-level arm motor access (for auto-tune) ─────────────────
 
     def set_arm_duty_cycle(self, output: float) -> None:
@@ -127,6 +141,21 @@ class IntakeSubSystem(Subsystem):
             rev.ResetMode.kNoResetSafeParameters,
             rev.PersistMode.kNoPersistParameters,
         )
+        self._last_kp = kp
+        self._last_ki = ki
+        self._last_kd = kd
+
+    def update_pid_from_nt(self) -> None:
+        """Read PID gains from NetworkTables and apply if changed.
+
+        Call this from disabledPeriodic so gains are flashed while the
+        robot is safe to reconfigure.
+        """
+        kp = self._arm_kp_sub.get()
+        ki = self._arm_ki_sub.get()
+        kd = self._arm_kd_sub.get()
+        if kp != self._last_kp or ki != self._last_ki or kd != self._last_kd:
+            self.set_arm_pid_gains(kp, ki, kd)
 
     # ── Arm position control ───────────────────────────────────────
 
