@@ -6,7 +6,6 @@ from pathplannerlib.controller import PPHolonomicDriveController
 from wpilib import DriverStation, Timer
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 
-from commands.clearout import Clearout
 
 # Field dimensions: 651.22 × 317.69 inches
 FIELD_LENGTH_M = 651.22 * 0.0254  # 16.541 m
@@ -252,9 +251,6 @@ class HubShot(Command):
     def end(self, interrupted: bool):
         PPHolonomicDriveController.setRotationTargetOverride(None)
         self._feeding_pub.set(False)
-        Clearout(
-            self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
-        ).schedule()
         self.hood.stow()
 
     def isFinished(self) -> bool:
