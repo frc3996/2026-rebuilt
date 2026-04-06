@@ -81,7 +81,7 @@ class MyRobot(commands2.TimedCommandRobot):
             commands2.CommandScheduler.getInstance().cancel(self.autonomousCommand)
 
         # Auto-home on first enable — skips if already homed
-        if not self.container.hood.is_homed or not self.container.intake.homed:
+        if not self.container.hood.is_homed:
             commands2.CommandScheduler.getInstance().schedule(
                 self.container.getAutoHomeCommand()
             )

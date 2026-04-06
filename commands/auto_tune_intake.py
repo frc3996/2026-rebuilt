@@ -4,7 +4,7 @@ import commands2
 import ntcore
 from wpilib import Timer
 
-from subsystems.intake import IntakeSubSystem
+from subsystems.intake import DEPLOY_POSITION, STOW_POSITION, IntakeSubSystem
 
 # Auto-tune constants
 RELAY_OUTPUT = 0.12  # Duty cycle for bang-bang oscillation  # TUNE
@@ -39,11 +39,7 @@ class AutoTuneIntakeCommand(commands2.Command):
         self._kd_pub = table.getDoubleTopic("Kd").publish()
 
     def initialize(self) -> None:
-        if not self.intake.homed or not self.intake.limits_set:
-            self._timed_out = True
-            return
-
-        self._midpoint = (self.intake.min_rotations + self.intake.max_rotations) / 2.0
+        self._midpoint = (DEPLOY_POSITION + STOW_POSITION) / 2.0
         self._crossings = []
         self._above = self.intake.get_arm_position() >= self._midpoint
         self._timed_out = False

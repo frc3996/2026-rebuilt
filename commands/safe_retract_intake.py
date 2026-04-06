@@ -1,62 +1,33 @@
 import commands2
 from wpilib import Timer
 
-from subsystems.intake import (STALL_CURRENT_THRESHOLD,
-                               STALL_VELOCITY_THRESHOLD, STOW_POSITION,
-                               IntakeSubSystem)
+from subsystems.intake import STOW_POSITION, IntakeSubSystem
 
-RETRACT_DUTYCYCLE = -0.30  # Duty cycle toward stow (negative = retract)  # TUNE
-RETRACT_TIMEOUT_SECONDS = 10.0
-RETRACT_STALL_CYCLES = 10
+RETRACT_TIMEOUT_SECONDS = 2.0
 
 
 class SafeRetractIntake(commands2.Command):
     """
-    Slowly retracts the intake arm to stow using a gentle duty cycle.
-    Stops when the arm reaches STOW_POSITION or stalls.
-    Requires the arm to be homed first.
+    Retracts the intake arm to stow position using PID position control.
+    Stops when the arm reaches STOW_POSITION or times out.
+    On end, holds at current position via PID.
     """
 
     def __init__(self, intake: IntakeSubSystem) -> None:
         super().__init__()
         self.intake = intake
         self.addRequirements(self.intake)
-        self._stall_counter: int = 0
         self._timer = Timer()
-        self._timed_out: bool = False
 
     def initialize(self) -> None:
-        self._stall_counter = 0
-        self._timed_out = False
         self._timer.restart()
-
-        if not self.intake.homed:
-            self._timed_out = True
-            return
-
-        self.intake.set_arm_duty_cycle(RETRACT_DUTYCYCLE)
-
-    def execute(self) -> None:
-        if self._timer.hasElapsed(RETRACT_TIMEOUT_SECONDS):
-            self._timed_out = True
-            return
-
-        current = self.intake.get_arm_current()
-        velocity = abs(self.intake.get_arm_velocity())
-
-        if velocity < STALL_VELOCITY_THRESHOLD or current > STALL_CURRENT_THRESHOLD:
-            self._stall_counter += 1
-        else:
-            self._stall_counter = 0
+        self.intake.set_arm_target_position(STOW_POSITION)
 
     def end(self, interrupted: bool) -> None:
-        self.intake.stop_arm()
-        # Hold at current position via PID
+        # Hold at whatever position we ended up at
         self.intake.set_arm_target_position(self.intake.get_arm_position())
 
     def isFinished(self) -> bool:
-        if self._timed_out:
+        if self._timer.hasElapsed(RETRACT_TIMEOUT_SECONDS):
             return True
-        if self._stall_counter >= RETRACT_STALL_CYCLES:
-            return True
-        return self.intake.get_arm_position() <= STOW_POSITION
+        return self.intake.is_stowed

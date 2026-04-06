@@ -29,14 +29,12 @@ from commands.auto_tune_kicker import AutoTuneKickerCommand
 from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
-from commands.home_intake import HomeIntake
 from commands.hub_shot import HubShot, VirtualGoal
-from commands.safe_retract_intake import SafeRetractIntake
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
-from subsystems.intake import IntakeSubSystem
+from subsystems.intake import DEPLOY_POSITION, STOW_POSITION, IntakeSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import CAMERAS, VisionSubsystem
@@ -338,12 +336,10 @@ class RobotContainer:
             .finallyDo(lambda interrupted: hood_pos_pub.set(self.hood.min_rotations))
         )
 
-        # Back: Home intake arm, reset NT position regardless of outcome
+        # Back: Reset NT arm position
         self._joystick_1.back().onTrue(
-            HomeIntake(self.intake)
-            .withTimeout(HOMING_TIMEOUT_SECONDS)
-            .finallyDo(
-                lambda interrupted: arm_pos_pub.set(self.intake.get_arm_position())
+            cmd.runOnce(
+                lambda: arm_pos_pub.set(self.intake.get_arm_position())
             )
         )
 
@@ -355,16 +351,6 @@ class RobotContainer:
         # POV Down: Set hood min limit at current position
         self._joystick_1.povDown().onTrue(
             cmd.runOnce(self.hood.set_min_limit, self.hood)
-        )
-
-        # POV Right: Set intake max limit at current position
-        self._joystick_1.povRight().onTrue(
-            cmd.runOnce(self.intake.set_max_limit, self.intake)
-        )
-
-        # POV Left: Set intake min limit at current position
-        self._joystick_1.povLeft().onTrue(
-            cmd.runOnce(self.intake.set_min_limit, self.intake)
         )
 
         # ── Default commands — track NT positions after homing, stop if not homed ─
@@ -380,11 +366,7 @@ class RobotContainer:
         )
         self.intake.setDefaultCommand(
             self.intake.run(
-                lambda: (
-                    self.intake.set_arm_target_position(arm_pos_sub.get())
-                    if self.intake.homed
-                    else self.intake.stop_arm()
-                )
+                lambda: self.intake.set_arm_target_position(arm_pos_sub.get())
             )
         )
 
@@ -418,18 +400,14 @@ class RobotContainer:
 
         self.hood.setDefaultCommand(self.hood.run(_hood_from_stick))
 
-        # Right stick Y: intake arm — stick up=deployed (min), stick down=stowed (max)
+        # Right stick Y: intake arm — stick up=deployed, stick down=stowed
         def _intake_from_stick():
-            if not self.intake.homed:
-                return
             raw = -self._joystick_1.getRightY()  # 0..1 when pushed up
             t = max(0.0, raw)
             if t < 0.05:
                 self.intake.hold()
                 return
-            pos = self.intake.max_rotations + t * (
-                self.intake.min_rotations - self.intake.max_rotations
-            )
+            pos = STOW_POSITION + t * (DEPLOY_POSITION - STOW_POSITION)
             self.intake.set_arm_target_position(pos)
 
         self.intake.setDefaultCommand(self.intake.run(_intake_from_stick))
@@ -438,10 +416,6 @@ class RobotContainer:
         self._joystick_1.leftBumper().onTrue(
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
-        self._joystick_1.rightBumper().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
-
         # Auto-tune (hood/intake use Z-N for position PID)
         self._joystick_1.start().onTrue(AutoTuneHoodCommand(self.hood))
         self._joystick_1.back().onTrue(AutoTuneIntakeCommand(self.intake))
@@ -578,9 +552,9 @@ class RobotContainer:
         )
 
         # Y: Stow intake arm
-        self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
-        self._joystick_2.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_2.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
 
         self._joystick_1.rightBumper().whileTrue(self._dump_shot)
@@ -590,13 +564,8 @@ class RobotContainer:
         #     HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         # )
 
-        # # LB: Home intake arm
-        # self._joystick_1.leftBumper().onTrue(
-        #     HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        # )
-
-        # Back: Re-home hood + intake
-        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
+        # Back: Re-home hood
+        self._joystick_1.back().onTrue(AutoHome(self.hood))
 
         # Climb function — disabled until PCM is on CAN bus
         self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
@@ -741,7 +710,7 @@ class RobotContainer:
         )
 
         # Y: Stow intake arm
-        self._joystick_1.y().onTrue(SafeRetractIntake(self.intake))
+        self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
 
 
@@ -752,17 +721,12 @@ class RobotContainer:
             HomeHood(self.hood).withTimeout(HOMING_TIMEOUT_SECONDS)
         )
 
-        # LB: Home intake arm
-        self._joystick_1.leftBumper().onTrue(
-            HomeIntake(self.intake).withTimeout(HOMING_TIMEOUT_SECONDS)
-        )
-
-        # Back: Re-home hood + intake
-        self._joystick_1.back().onTrue(AutoHome(self.hood, self.intake))
+        # Back: Re-home hood
+        self._joystick_1.back().onTrue(AutoHome(self.hood))
 
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""
-        return AutoHome(self.hood, self.intake)
+        return AutoHome(self.hood)
 
     def getAutonomousCommand(self) -> commands2.Command:
         """

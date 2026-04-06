@@ -6,8 +6,8 @@ from subsystems.indexer import IndexerSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 
-DUMP_RPM = 2800
-FEED_DELAY_S = 2.0
+DUMP_RPM = 2000
+FEED_DELAY_S = 1.0
 
 
 class DumpShot(Command):
