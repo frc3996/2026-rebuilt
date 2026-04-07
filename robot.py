@@ -54,14 +54,17 @@ class MyRobot(commands2.TimedCommandRobot):
     def disabledInit(self) -> None:
         """This function is called once each time the robot enters Disabled mode."""
         self.container.limelight.set_throttle(0)
+        setattr(self.container.limelight, '_use_megatag2', False)
 
     def disabledPeriodic(self) -> None:
         """This function is called periodically when disabled"""
         self.container.intake.update_pid_from_nt()
+        self.container.publishSelectedAutoStartingPose()
 
     def autonomousInit(self) -> None:
         """This autonomous runs the autonomous command selected by your RobotContainer class."""
         self.container.limelight.set_throttle(0)
+        setattr(self.container.limelight, '_use_megatag2', True)
         self.autonomousCommand = self.container.getAutonomousCommand()
 
         if self.autonomousCommand:
@@ -73,6 +76,7 @@ class MyRobot(commands2.TimedCommandRobot):
 
     def teleopInit(self) -> None:
         self.container.limelight.set_throttle(0)
+        setattr(self.container.limelight, '_use_megatag2', True)
         # This makes sure that the autonomous stops running when
         # teleop starts running. If you want the autonomous to
         # continue until interrupted by another command, remove

@@ -5,7 +5,7 @@
     "data": {
       "commands": [
         {
-          "type": "parallel",
+          "type": "deadline",
           "data": {
             "commands": [
               {
@@ -48,10 +48,22 @@
               {
                 "type": "named",
                 "data": {
-                  "name": "hubshot"
+                  "name": "shoot"
                 }
               }
             ]
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "clearout"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "brake"
           }
         },
         {

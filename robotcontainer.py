@@ -13,10 +13,11 @@ from ntcore import NetworkTableInstance
 from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
                                  PathPlannerPath)
 from pathplannerlib.events import EventTrigger
+from pathplannerlib.util import FlippingUtil
 from phoenix6 import swerve
 from rev import StatusLogger
 from wpilib import DriverStation, SmartDashboard
-from wpimath.geometry import Rotation2d
+from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import rotationsToRadians
 
 from commands.clearout import Clearout
@@ -124,35 +125,63 @@ class RobotContainer:
 
         # ── Named Commands (for sequential auto structure) ──
         NamedCommands.registerCommand("retract-intake", cmd.none())  # Dummy command
-        NamedCommands.registerCommand("intake", cmd.runOnce(
+        NamedCommands.registerCommand("intake", cmd.run(
                 lambda: (
                     self.intake.deploy(),
                     self.intake.set_roller_duty_cycle(1.0),
-                ),
+                ), self.intake
             )
         )
         NamedCommands.registerCommand("stop intake", cmd.runOnce(
                 lambda: (
                     self.intake.stow(),
                     self.intake.set_roller_duty_cycle(0.0),
-                ),
+                ), self.intake
             )
         )
-        NamedCommands.registerCommand("shoot", cmd.none())  # Dummy command
         NamedCommands.registerCommand("climb", ExtendClimb(self.climber))
         NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
 
         # ── Named Commands for auto sequencing ──
         NamedCommands.registerCommand(
+            "shoot",
+            HubShot(
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, wait_time=3
+            ),
+        )
+        NamedCommands.registerCommand(
             "hubshot",
             HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, wait_time=3
             ),
+        )
+
+        NamedCommands.registerCommand(
+            "brake",
+            self.drivetrain.apply_request(lambda: self._brake)
+        )
+
+        NamedCommands.registerCommand(
+            "clearout",
+            Clearout(
+                self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
+            )
         )
 
         # Path follower
         self._auto_chooser = AutoBuilder.buildAutoChooser("test shoot")
         SmartDashboard.putData("Auto Mode", self._auto_chooser)
+
+        # Publish the starting pose of the selected auto so AdvantageScope
+        # can render it on the field while we're still in disabled.
+        self._auto_starting_pose_pub = (
+            NetworkTableInstance.getDefault()
+            .getStructTopic("Auto/StartingPose", Pose2d)
+            .publish()
+        )
+        self._last_auto_key: tuple[str | None, bool] | None = None
+
+        self._last_auto_name: str | None = None
 
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
@@ -750,3 +779,34 @@ class RobotContainer:
         """
 
         return self._auto_chooser.getSelected()
+
+    def publishSelectedAutoStartingPose(self) -> None:
+        """Publish the starting pose of the currently selected PathPlanner auto.
+
+        Called from robotPeriodic so AdvantageScope updates as soon as the
+        auto selection changes (including while disabled). Flips the pose
+        for the red alliance to match how PathPlanner runs the auto.
+        """
+        selected = self._auto_chooser.getSelected()
+        name = selected.getName() if selected is not None else None
+        is_red = DriverStation.getAlliance() == DriverStation.Alliance.kRed
+        key = (name, is_red)
+        if key == self._last_auto_key:
+            return
+        self._last_auto_key = key
+
+        pose = Pose2d()
+        if name:
+            try:
+                paths = PathPlannerAuto.getPathGroupFromAutoFile(name)
+                if paths:
+                    starting = paths[0].getStartingHolonomicPose()
+                    if starting is not None:
+                        pose = (
+                            FlippingUtil.flipFieldPose(starting)
+                            if is_red
+                            else starting
+                        )
+            except Exception:
+                pass
+        self._auto_starting_pose_pub.set(pose)

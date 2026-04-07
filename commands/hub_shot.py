@@ -206,7 +206,7 @@ class HubShot(Command):
     Stages motors (shooter → kicker → conveyor) and adjusts hood position.
     """
 
-    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal):
+    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal, wait_time=0):
         super().__init__()
         self.shooter = shooter
         self.kicker = kicker
@@ -218,6 +218,8 @@ class HubShot(Command):
 
         self._feed_timer = Timer()
         self._speed_reached = False
+        self._last_rpms = []
+        self._wait_time = wait_time
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Shoot")
         self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
@@ -231,6 +233,7 @@ class HubShot(Command):
 
     def initialize(self):
         self._feed_timer.restart()
+        self._last_rpms = []
         self._speed_reached = False
         PPHolonomicDriveController.setRotationTargetOverride(self._aim_override)
 
@@ -247,10 +250,16 @@ class HubShot(Command):
         self.shooter.set_target_speed(target_rpm)
         self.hood.set_target_position(target_hood)
 
-        if abs(self.shooter.get_current_speed() - target_rpm) < 250:
+        current_rpm = self.shooter.get_current_speed()
+        self._last_rpms.append(current_rpm)
+        self._last_rpms = self._last_rpms[-10:]
+
+        if current_rpm > 1000 and len(self._last_rpms) >= 10 and abs((sum(self._last_rpms)/len(self._last_rpms)) - current_rpm) < 50:
             self._speed_reached = True
 
-        if self._feed_timer.hasElapsed(self.FEED_DELAY_S) or self._speed_reached:
+        # print(self._last_rpms)
+
+        if (self._feed_timer.hasElapsed(self.FEED_DELAY_S) or self._speed_reached) and self._feed_timer.hasElapsed(self._wait_time):
             self.kicker.set_duty_cycle(1.0)
             self.indexer.set_target_output(1.0)
         else:
