@@ -15,7 +15,7 @@ from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
 from pathplannerlib.events import EventTrigger
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
-from wpimath.geometry import Rotation2d
+from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import rotationsToRadians
 
 from commands.clearout import Clearout
@@ -153,6 +153,15 @@ class RobotContainer:
         # Path follower
         self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
         SmartDashboard.putData("Auto Mode", self._auto_chooser)
+
+        # Publish the starting pose of the selected auto so AdvantageScope
+        # can render it on the field while we're still in disabled.
+        self._auto_starting_pose_pub = (
+            NetworkTableInstance.getDefault()
+            .getStructTopic("Auto/StartingPose", Pose2d)
+            .publish()
+        )
+        self._last_auto_name: str | None = None
 
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
@@ -736,3 +745,28 @@ class RobotContainer:
         """
 
         return self._auto_chooser.getSelected()
+
+    def publishSelectedAutoStartingPose(self) -> None:
+        """Publish the starting pose of the currently selected PathPlanner auto.
+
+        Called from robotPeriodic so AdvantageScope updates as soon as the
+        auto selection changes (including while disabled).
+        """
+        selected = self._auto_chooser.getSelected()
+        # SendableChooser may return None or the default command before NT updates
+        name = selected.getName() if selected is not None else None
+        if name == self._last_auto_name:
+            return
+        self._last_auto_name = name
+
+        pose = Pose2d()
+        if name:
+            try:
+                paths = PathPlannerAuto.getPathGroupFromAutoFile(name)
+                if paths:
+                    starting = paths[0].getStartingHolonomicPose()
+                    if starting is not None:
+                        pose = starting
+            except Exception:
+                pass
+        self._auto_starting_pose_pub.set(pose)
