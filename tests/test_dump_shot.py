@@ -91,3 +91,13 @@ def test_end_stows_hood_on_interrupt(shooter, kicker, indexer, hood):
     cmd.end(interrupted=True)
 
     hood.stow.assert_called_once()
+
+
+def test_end_stops_all_motors(shooter, kicker, indexer, hood):
+    """End must stop shooter, kicker, and indexer to prevent runaway motors."""
+    cmd = _make_cmd(shooter, kicker, indexer, hood)
+    cmd.end(interrupted=True)
+
+    shooter.stop.assert_called_once()
+    kicker.stop.assert_called_once()
+    indexer.stop.assert_called_once()

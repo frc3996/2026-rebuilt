@@ -46,6 +46,9 @@ class DumpShot(Command):
             self.indexer.stop()
 
     def end(self, interrupted: bool):
+        self.shooter.stop()
+        self.kicker.stop()
+        self.indexer.stop()
         self.hood.stow()
 
     def isFinished(self) -> bool:
