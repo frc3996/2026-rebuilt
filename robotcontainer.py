@@ -146,13 +146,13 @@ class RobotContainer:
         NamedCommands.registerCommand(
             "shoot",
             HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, wait_time=3
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
             ),
         )
         NamedCommands.registerCommand(
             "hubshot",
             HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, wait_time=3
+                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
             ),
         )
 

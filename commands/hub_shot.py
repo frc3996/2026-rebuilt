@@ -87,6 +87,7 @@ class VirtualGoal:
         self.last_raw_distance = 0.0
         self.last_rpm = 0.0
         self.last_hood_turns = 0.0
+        self.last_aim_error_rad = math.pi  # start far from target
         self.vg_x_samples = []
         self.vg_y_samples = []
         self.distance_samples = []
@@ -145,6 +146,7 @@ class VirtualGoal:
         if raw_distance < 0.5:
             aim = Rotation2d(math.atan2(dy, dx))
             rpm, hood = compute_ballistics(raw_distance)
+            self.last_aim_error_rad = abs((aim - heading).radians())
             self._store(raw_distance, rpm, hood, 0.0)
             self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
             return aim, 0.0
@@ -183,6 +185,9 @@ class VirtualGoal:
         dist_sq = vdx * vdx + vdy * vdy
         ff = (vdx * field_vy - vdy * field_vx) / dist_sq
 
+        # Aim error: shortest-angle distance from current heading to target
+        self.last_aim_error_rad = abs((aim - heading).radians())
+
         self._store(distance, rpm, hood, flight_time)
         self._vg_pose_pub.set(Pose2d(vg_x, vg_y, aim))
         return aim, ff
@@ -206,7 +211,7 @@ class HubShot(Command):
     Stages motors (shooter → kicker → conveyor) and adjusts hood position.
     """
 
-    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal, wait_time=0):
+    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal):
         super().__init__()
         self.shooter = shooter
         self.kicker = kicker
@@ -217,9 +222,11 @@ class HubShot(Command):
         self.addRequirements(shooter, kicker, indexer, hood)
 
         self._feed_timer = Timer()
+        self._speed_steady_timer = Timer()
+        self._aim_steady_timer = Timer()
         self._speed_reached = False
-        self._last_rpms = []
-        self._wait_time = wait_time
+        self._aim_reached = False
+        self._prev_rpm = 0.0
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Shoot")
         self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
@@ -230,11 +237,19 @@ class HubShot(Command):
         self._feeding_pub = table.getBooleanTopic("Feeding").publish()
 
     FEED_DELAY_S = 2
+    SPEED_FLAT_RPM = 50  # max sample-to-sample delta to count as "flat"
+    SPEED_MIN_RPM = 1000  # below this we're not actually shooting
+    SPEED_STEADY_S = 0.25
+    AIM_TOL_RAD = math.radians(2.0)
+    AIM_STEADY_S = 0.25
 
     def initialize(self):
         self._feed_timer.restart()
-        self._last_rpms = []
+        self._speed_steady_timer.restart()
+        self._aim_steady_timer.restart()
         self._speed_reached = False
+        self._aim_reached = False
+        self._prev_rpm = 0.0
         PPHolonomicDriveController.setRotationTargetOverride(self._aim_override)
 
     def _aim_override(self):
@@ -250,16 +265,24 @@ class HubShot(Command):
         self.shooter.set_target_speed(target_rpm)
         self.hood.set_target_position(target_hood)
 
+        # Debounced flatness: shooter consistently undershoots target, so we check that
+        # RPM has stopped changing (sample-to-sample delta < SPEED_FLAT_RPM) and is above
+        # SPEED_MIN_RPM, sustained for SPEED_STEADY_S.
         current_rpm = self.shooter.get_current_speed()
-        self._last_rpms.append(current_rpm)
-        self._last_rpms = self._last_rpms[-10:]
-
-        if current_rpm > 1000 and len(self._last_rpms) >= 10 and abs((sum(self._last_rpms)/len(self._last_rpms)) - current_rpm) < 50:
+        if current_rpm < self.SPEED_MIN_RPM or abs(current_rpm - self._prev_rpm) > self.SPEED_FLAT_RPM:
+            self._speed_steady_timer.restart()
+        self._prev_rpm = current_rpm
+        if self._speed_steady_timer.hasElapsed(self.SPEED_STEADY_S):
             self._speed_reached = True
 
-        # print(self._last_rpms)
+        # Debounced aim: heading must stay within AIM_TOL_RAD of target for AIM_STEADY_S
+        if vg.last_aim_error_rad > self.AIM_TOL_RAD:
+            self._aim_steady_timer.restart()
+        if self._aim_steady_timer.hasElapsed(self.AIM_STEADY_S):
+            self._aim_reached = True
 
-        if (self._feed_timer.hasElapsed(self.FEED_DELAY_S) or self._speed_reached) and self._feed_timer.hasElapsed(self._wait_time):
+        ready_to_feed = self._speed_reached and self._aim_reached
+        if self._feed_timer.hasElapsed(self.FEED_DELAY_S) or ready_to_feed:
             self.kicker.set_duty_cycle(1.0)
             self.indexer.set_target_output(1.0)
         else:
