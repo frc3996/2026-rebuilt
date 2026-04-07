@@ -13,6 +13,7 @@ from ntcore import NetworkTableInstance
 from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
                                  PathPlannerPath)
 from pathplannerlib.events import EventTrigger
+from pathplannerlib.util import FlippingUtil
 from phoenix6 import swerve
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Pose2d, Rotation2d
@@ -161,7 +162,7 @@ class RobotContainer:
             .getStructTopic("Auto/StartingPose", Pose2d)
             .publish()
         )
-        self._last_auto_name: str | None = None
+        self._last_auto_key: tuple[str | None, bool] | None = None
 
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
@@ -750,14 +751,16 @@ class RobotContainer:
         """Publish the starting pose of the currently selected PathPlanner auto.
 
         Called from robotPeriodic so AdvantageScope updates as soon as the
-        auto selection changes (including while disabled).
+        auto selection changes (including while disabled). Flips the pose
+        for the red alliance to match how PathPlanner runs the auto.
         """
         selected = self._auto_chooser.getSelected()
-        # SendableChooser may return None or the default command before NT updates
         name = selected.getName() if selected is not None else None
-        if name == self._last_auto_name:
+        is_red = DriverStation.getAlliance() == DriverStation.Alliance.kRed
+        key = (name, is_red)
+        if key == self._last_auto_key:
             return
-        self._last_auto_name = name
+        self._last_auto_key = key
 
         pose = Pose2d()
         if name:
@@ -766,7 +769,11 @@ class RobotContainer:
                 if paths:
                     starting = paths[0].getStartingHolonomicPose()
                     if starting is not None:
-                        pose = starting
+                        pose = (
+                            FlippingUtil.flipFieldPose(starting)
+                            if is_red
+                            else starting
+                        )
             except Exception:
                 pass
         self._auto_starting_pose_pub.set(pose)
