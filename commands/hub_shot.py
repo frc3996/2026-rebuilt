@@ -87,6 +87,9 @@ class VirtualGoal:
         self.last_raw_distance = 0.0
         self.last_rpm = 0.0
         self.last_hood_turns = 0.0
+        self.vg_x_samples = []
+        self.vg_y_samples = []
+        self.distance_samples = []
 
         # Telemetry
         vg_table = NetworkTableInstance.getDefault().getTable("VirtualGoal")
@@ -143,8 +146,7 @@ class VirtualGoal:
             aim = Rotation2d(math.atan2(dy, dx))
             rpm, hood = compute_ballistics(raw_distance)
             self._store(raw_distance, rpm, hood, 0.0)
-            if DEBUG_NT:
-                self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
+            self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
             return aim, 0.0
 
         slip = self._slip_factor_sub.get()
@@ -157,9 +159,21 @@ class VirtualGoal:
             exit_velocity = _rpm_to_exit_velocity(rpm, slip)
             flight_time = raw_distance / exit_velocity
 
-            vg_x = hub.X() - field_vx * flight_time
-            vg_y = hub.Y() - field_vy * flight_time
-            distance = math.hypot(vg_x - pred_x, vg_y - pred_y)
+            new_vg_x = hub.X() - field_vx * flight_time
+            new_vg_y = hub.Y() - field_vy * flight_time
+            new_distance = math.hypot(new_vg_x - pred_x, new_vg_y - pred_y)
+
+            self.vg_x_samples.append(new_vg_x)
+            self.vg_y_samples.append(new_vg_y)
+            self.distance_samples.append(new_distance)
+
+            self.vg_x_samples = self.vg_x_samples[-10:]
+            self.vg_y_samples = self.vg_y_samples[-10:]
+            self.distance_samples = self.distance_samples[-10:]
+
+            vg_x = sum(self.vg_x_samples) / len(self.vg_x_samples)
+            vg_y = sum(self.vg_y_samples) / len(self.vg_y_samples)
+            distance = sum(self.distance_samples) / len(self.distance_samples)
 
         vdx = vg_x - pred_x
         vdy = vg_y - pred_y
