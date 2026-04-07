@@ -2,7 +2,7 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import CANIds
+from constants import DEBUG_NT, CANIds
 
 # FF gains from CalibrateFF
 RIGHT_KF = 1.8e-4
@@ -137,6 +137,8 @@ class KickerSubSystem(Subsystem):
         self._left_motor.stopMotor()
 
     def periodic(self):
+        if not DEBUG_NT:
+            return
         self._right_velocity_pub.set(self._right_encoder.getVelocity())
         self._left_velocity_pub.set(self._left_encoder.getVelocity())
         self._target_pub.set(self._target_speed)

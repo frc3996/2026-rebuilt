@@ -2,10 +2,10 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import NEO_FREE_SPEED_RPM, CANIds
+from constants import DEBUG_NT, NEO_FREE_SPEED_RPM, CANIds
 
 # Arm positions — absolute encoder reads 0‥1 turns
-DEPLOY_POSITION = 0.458  # Fully deployed  # TUNE
+DEPLOY_POSITION = 0.5  # Fully deployed  # TUNE
 STOW_POSITION = 0.219  # Retracted/stowed  # TUNE
 
 
@@ -46,8 +46,8 @@ class IntakeSubSystem(Subsystem):
         self._arm_config = rev.SparkMaxConfig()
         self._arm_config.inverted(True)
         self._arm_config.voltageCompensation(10)
-        self._arm_config.smartCurrentLimit(15)
-        self._arm_config.secondaryCurrentLimit(20)
+        self._arm_config.smartCurrentLimit(10)
+        self._arm_config.secondaryCurrentLimit(15)
         self._arm_config.IdleMode(rev.SparkBaseConfig.IdleMode.kBrake)
         # Absolute encoder on the data port
         self._arm_config.absoluteEncoder.setSparkMaxDataPortConfig()
@@ -211,6 +211,8 @@ class IntakeSubSystem(Subsystem):
     # ── Periodic ───────────────────────────────────────────────────
 
     def periodic(self) -> None:
+        if not DEBUG_NT:
+            return
         self._arm_amps_pub.set(self._arm_motor.getOutputCurrent())
         self._arm_position_pub.set(self._arm_encoder.getPosition())
         self._arm_target_pub.set(self._arm_target)

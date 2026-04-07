@@ -7,6 +7,7 @@ from commands2 import Command
 from wpilib import DriverStation, Timer
 
 from commands.hub_shot import BLUE_HUB, RED_HUB
+from constants import DEBUG_NT
 from subsystems.hood import HoodSubSystem
 from subsystems.indexer import IndexerSubSystem
 from subsystems.kicker import KickerSubSystem
@@ -102,24 +103,26 @@ class TuneShot(Command):
 
         current_rpm = self.shooter.get_current_speed()
         distance = self._get_hub_distance()
-        self._distance_pub.set(distance)
-        self._feeding_pub.set(feeding)
-        self._shooter_ready_pub.set(abs(current_rpm - target_rpm) < SHOOTER_TOLERANCE_RPM)
-        self._current_rpm_pub.set(current_rpm)
-        self._rpm_error_pub.set(abs(current_rpm - target_rpm))
+        if DEBUG_NT:
+            self._distance_pub.set(distance)
+            self._feeding_pub.set(feeding)
+            self._shooter_ready_pub.set(abs(current_rpm - target_rpm) < SHOOTER_TOLERANCE_RPM)
+            self._current_rpm_pub.set(current_rpm)
+            self._rpm_error_pub.set(abs(current_rpm - target_rpm))
 
-        # Publish entries + current live point
-        entries = [f"({d:.2f}, {h:.1f}, {int(r)})" for d, h, r in self._entries]
-        entries.append(f"({distance:.2f}, {hood_pos:.1f}, {int(target_rpm)})")
-        self._entries_pub.set(entries)
+            # Publish entries + current live point
+            entries = [f"({d:.2f}, {h:.1f}, {int(r)})" for d, h, r in self._entries]
+            entries.append(f"({distance:.2f}, {hood_pos:.1f}, {int(target_rpm)})")
+            self._entries_pub.set(entries)
 
     def end(self, interrupted: bool) -> None:
         self.shooter.stop()
         self.kicker.stop()
         self.indexer.stop()
         self.hood.stow()
-        self._feeding_pub.set(False)
-        self._shooter_ready_pub.set(False)
+        if DEBUG_NT:
+            self._feeding_pub.set(False)
+            self._shooter_ready_pub.set(False)
 
     def isFinished(self) -> bool:
         return False
@@ -147,10 +150,11 @@ class TuneShot(Command):
         """Log current (distance, hood_turns, shooter_rpm) as a calibration point."""
         entry = (self._get_hub_distance(), self._hood_sub.get(), self._rpm_sub.get())
         self._entries.append(entry)
-        self._entries_pub.set(
-            [f"({d:.2f}, {h:.1f}, {int(r)})" for d, h, r in self._entries]
-        )
-        self._entry_count_pub.set(len(self._entries))
+        if DEBUG_NT:
+            self._entries_pub.set(
+                [f"({d:.2f}, {h:.1f}, {int(r)})" for d, h, r in self._entries]
+            )
+            self._entry_count_pub.set(len(self._entries))
 
         # Append to CSV on roboRIO (creates with header if missing)
         write_header = not SHOT_LOG_PATH.exists()

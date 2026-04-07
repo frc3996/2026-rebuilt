@@ -14,6 +14,7 @@ from pathplannerlib.auto import (AutoBuilder, NamedCommands, PathPlannerAuto,
                                  PathPlannerPath)
 from pathplannerlib.events import EventTrigger
 from phoenix6 import swerve
+from rev import StatusLogger
 from wpilib import DriverStation, SmartDashboard
 from wpimath.geometry import Rotation2d
 from wpimath.units import rotationsToRadians
@@ -58,6 +59,7 @@ class RobotContainer:
     """
 
     def __init__(self) -> None:
+        StatusLogger.stop()
         self._max_speed = (
             1.0 * TunerConstants.speed_at_12_volts
         )  # speed_at_12_volts desired top speed
@@ -117,15 +119,28 @@ class RobotContainer:
         self.intake.setDefaultCommand(self.intake.run(self.intake.hold))
         self.hood.setDefaultCommand(self.hood.run(self.hood.stow))
 
-        self.climb_left_path = PathPlannerPath.fromPathFile("test move")
-        self.climb_right_path = PathPlannerPath.fromPathFile("test move")
+        # self.climb_left_path = PathPlannerPath.fromPathFile("test move")
+        # self.climb_right_path = PathPlannerPath.fromPathFile("test move")
 
         # ── Named Commands (for sequential auto structure) ──
         NamedCommands.registerCommand("retract-intake", cmd.none())  # Dummy command
-        NamedCommands.registerCommand("intake", cmd.none())  # Dummy command
-        NamedCommands.registerCommand("stop intake", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("intake", cmd.runOnce(
+                lambda: (
+                    self.intake.deploy(),
+                    self.intake.set_roller_duty_cycle(1.0),
+                ),
+            )
+        )
+        NamedCommands.registerCommand("stop intake", cmd.runOnce(
+                lambda: (
+                    self.intake.stow(),
+                    self.intake.set_roller_duty_cycle(0.0),
+                ),
+            )
+        )
         NamedCommands.registerCommand("shoot", cmd.none())  # Dummy command
-        NamedCommands.registerCommand("climb", cmd.none())  # Dummy command
+        NamedCommands.registerCommand("climb", ExtendClimb(self.climber))
+        NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
 
         # ── Named Commands for auto sequencing ──
         NamedCommands.registerCommand(
@@ -135,28 +150,15 @@ class RobotContainer:
             ),
         )
 
-        # ── Event Triggers (for zoned event markers on paths) ──
-        NamedCommands.registerCommand(
-            "intake",
-            cmd.startEnd(
-                lambda: (
-                    self.intake.deploy(),
-                    self.intake.set_roller_duty_cycle(1.0),
-                ),
-                lambda: (self.intake.set_roller_duty_cycle(0),),
-                self.intake,
-            ),
-        )
-
         # Path follower
-        self._auto_chooser = AutoBuilder.buildAutoChooser("Tests")
+        self._auto_chooser = AutoBuilder.buildAutoChooser("test shoot")
         SmartDashboard.putData("Auto Mode", self._auto_chooser)
 
         # Configure the button bindings — uncomment ONE group at a time:
         # self.configureSwerveButtonBindings()
         # self.configureHardwareTestBindings()
         # self.configureTuningTestBindings()
-        # self.configureManualBindings()
+        # self.configureManualBindings()  # <------ Utiliser pour tuner les shots
         self.configureCompetitionBindings()
 
 
@@ -716,6 +718,25 @@ class RobotContainer:
 
         # Back: Re-home hood
         self._joystick_1.back().onTrue(AutoHome(self.hood))
+
+        # Joystick 2 bindings
+        # POV Up: Enable MegaTag2 while held
+        self._joystick_2.povUp().onTrue(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', True),
+                )
+            )
+        )
+        self._joystick_2.povUp().onFalse(
+            cmd.runOnce(
+                lambda: (
+                    self.limelight.set_throttle(0),
+                    setattr(self.limelight, '_use_megatag2', False),
+                )
+            )
+        )
 
     def getAutoHomeCommand(self) -> commands2.Command:
         """Returns a command that homes the hood and intake arm sequentially."""

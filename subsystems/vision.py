@@ -100,8 +100,10 @@ class VisionSubsystem(Subsystem):
         else:
             factor = 0.9 + (avg_dist**2 / 30)
 
-        return (
-            0.5 * factor,
-            0.5 * factor,
-            math.inf if estimate.is_megatag_2 else 0.5 * factor,
+        trust = (
+            factor,
+            factor,
+            math.inf if estimate.is_megatag_2 else factor,
         )
+
+        return trust

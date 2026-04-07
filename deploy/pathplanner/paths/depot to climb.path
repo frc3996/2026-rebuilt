@@ -16,12 +16,12 @@
     },
     {
       "anchor": {
-        "x": 1.072,
-        "y": 2.616
+        "x": 2.1423450899553735,
+        "y": 2.2692429008140222
       },
       "prevControl": {
-        "x": 2.9334400948991703,
-        "y": 1.8885409252669034
+        "x": 4.003785184854543,
+        "y": 1.5417838260809256
       },
       "nextControl": null,
       "isLocked": false,
@@ -42,7 +42,7 @@
   },
   "goalEndState": {
     "velocity": 0,
-    "rotation": 90.0
+    "rotation": 32.69162953917153
   },
   "reversed": false,
   "folder": "depot",

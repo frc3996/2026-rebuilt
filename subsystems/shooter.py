@@ -2,7 +2,7 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import CANIds
+from constants import DEBUG_NT, CANIds
 
 # FF gain from CalibrateFF
 KF = 1.9e-4
@@ -124,6 +124,8 @@ class ShooterSubSystem(Subsystem):
         self._motor.stopMotor()
 
     def periodic(self):
+        if not DEBUG_NT:
+            return
         self._velocity_pub.set(self._encoder.getVelocity())
         self._target_pub.set(self._target_speed)
         self._amps_pub.set(self._motor.getOutputCurrent())

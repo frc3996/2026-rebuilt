@@ -2,7 +2,7 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import CANIds
+from constants import DEBUG_NT, CANIds
 
 # Homing constants
 HOMING_DUTYCYCLE = -0.15  # Duty cycle toward hard stop  # TUNE
@@ -202,14 +202,15 @@ class HoodSubSystem(Subsystem):
                 self._position_active = False
                 self._motor.stopMotor()
 
-        self._position_pub.set(self._encoder.getPosition())
-        self._target_pub.set(self._target_position)
-        self._velocity_pub.set(self._encoder.getVelocity())
-        self._amps_pub.set(current)
-        self._homed_pub.set(self.is_homed)
-        self._stall_cycle_pub.set(self._stall_cycle)
-        self._stall_count_pub.set(self._stall_count)
-        self._limits_set_pub.set(self.limits_set)
+        if DEBUG_NT:
+            self._position_pub.set(self._encoder.getPosition())
+            self._target_pub.set(self._target_position)
+            self._velocity_pub.set(self._encoder.getVelocity())
+            self._amps_pub.set(current)
+            self._homed_pub.set(self.is_homed)
+            self._stall_cycle_pub.set(self._stall_cycle)
+            self._stall_count_pub.set(self._stall_count)
+            self._limits_set_pub.set(self.limits_set)
 
     def simulationPeriodic(self) -> None:
         pass

@@ -2,7 +2,7 @@ import ntcore
 import rev
 from commands2 import Subsystem
 
-from constants import CANIds
+from constants import DEBUG_NT, CANIds
 
 
 class IndexerSubSystem(Subsystem):
@@ -43,6 +43,8 @@ class IndexerSubSystem(Subsystem):
         self._motor.stopMotor()
 
     def periodic(self):
+        if not DEBUG_NT:
+            return
         self._output_pub.set(self._target_output)
         self._amps_pub.set(self._motor.getOutputCurrent())
 

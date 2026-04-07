@@ -15,7 +15,7 @@ class ClimbSubsystem(Subsystem):
         self.solenoid = wpilib.Solenoid(10,
             moduleType=wpilib.PneumaticsModuleType.CTREPCM, channel=PneumaticChannels.CLIMBER_SOLENOID
         )
-        self.compressor = wpilib.Compressor(wpilib.PneumaticsModuleType.CTREPCM)
+        self.compressor = wpilib.Compressor(10, wpilib.PneumaticsModuleType.CTREPCM)
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Climber")
         self._solenoid_pub = table.getBooleanTopic("Solenoid Extended").publish()

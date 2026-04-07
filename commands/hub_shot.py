@@ -6,6 +6,8 @@ from pathplannerlib.controller import PPHolonomicDriveController
 from wpilib import DriverStation, Timer
 from wpimath.geometry import Pose2d, Rotation2d, Translation2d
 
+from constants import DEBUG_NT
+
 
 # Field dimensions: 651.22 × 317.69 inches
 FIELD_LENGTH_M = 651.22 * 0.0254  # 16.541 m
@@ -134,13 +136,15 @@ class VirtualGoal:
         raw_distance = math.hypot(dx, dy)
 
         self.last_raw_distance = raw_distance
-        self._raw_dist_pub.set(raw_distance)
+        if DEBUG_NT:
+            self._raw_dist_pub.set(raw_distance)
 
         if raw_distance < 0.5:
             aim = Rotation2d(math.atan2(dy, dx))
             rpm, hood = compute_ballistics(raw_distance)
             self._store(raw_distance, rpm, hood, 0.0)
-            self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
+            if DEBUG_NT:
+                self._vg_pose_pub.set(Pose2d(hub.X(), hub.Y(), Rotation2d()))
             return aim, 0.0
 
         slip = self._slip_factor_sub.get()
@@ -199,6 +203,7 @@ class HubShot(Command):
         self.addRequirements(shooter, kicker, indexer, hood)
 
         self._feed_timer = Timer()
+        self._speed_reached = False
 
         table = ntcore.NetworkTableInstance.getDefault().getTable("Shoot")
         self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
@@ -207,14 +212,12 @@ class HubShot(Command):
         self._rpm_error_pub = table.getDoubleTopic("RPM Error").publish()
         self._target_hood_pub = table.getDoubleTopic("Target Hood Turns").publish()
         self._feeding_pub = table.getBooleanTopic("Feeding").publish()
-        self._kicker_full_pub = table.getBooleanTopic("Kicker Full Speed").publish()
-        self._kicker_full_pub.set(True)
-        self._kicker_full_sub = table.getBooleanTopic("Kicker Full Speed").subscribe(False)
 
     FEED_DELAY_S = 2
 
     def initialize(self):
         self._feed_timer.restart()
+        self._speed_reached = False
         PPHolonomicDriveController.setRotationTargetOverride(self._aim_override)
 
     def _aim_override(self):
@@ -229,28 +232,31 @@ class HubShot(Command):
 
         self.shooter.set_target_speed(target_rpm)
         self.hood.set_target_position(target_hood)
-        if self._kicker_full_sub.get():
-            self.kicker.set_duty_cycle(1.0)
-        else:
-            self.kicker.set_target_speed(target_rpm)
 
-        if self._feed_timer.hasElapsed(self.FEED_DELAY_S):
+        if abs(self.shooter.get_current_speed() - target_rpm) < 250:
+            self._speed_reached = True
+
+        if self._feed_timer.hasElapsed(self.FEED_DELAY_S) or self._speed_reached:
+            self.kicker.set_duty_cycle(1.0)
             self.indexer.set_target_output(1.0)
         else:
-            self.indexer.stop()
+            self.indexer.set_target_output(-0.3)
+            self.kicker.set_duty_cycle(1.0)
 
-        current_rpm = self.shooter.get_current_speed()
-        feeding = self._feed_timer.hasElapsed(self.FEED_DELAY_S)
-        self._distance_pub.set(vg.last_virtual_distance)
-        self._target_rpm_pub.set(target_rpm)
-        self._current_rpm_pub.set(current_rpm)
-        self._rpm_error_pub.set(abs(current_rpm - target_rpm))
-        self._target_hood_pub.set(target_hood)
-        self._feeding_pub.set(feeding)
+        if DEBUG_NT:
+            current_rpm = self.shooter.get_current_speed()
+            feeding = self._feed_timer.hasElapsed(self.FEED_DELAY_S)
+            self._distance_pub.set(vg.last_virtual_distance)
+            self._target_rpm_pub.set(target_rpm)
+            self._current_rpm_pub.set(current_rpm)
+            self._rpm_error_pub.set(abs(current_rpm - target_rpm))
+            self._target_hood_pub.set(target_hood)
+            self._feeding_pub.set(feeding)
 
     def end(self, interrupted: bool):
         PPHolonomicDriveController.setRotationTargetOverride(None)
-        self._feeding_pub.set(False)
+        if DEBUG_NT:
+            self._feeding_pub.set(False)
         self.hood.stow()
 
     def isFinished(self) -> bool:

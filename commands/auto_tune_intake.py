@@ -4,6 +4,7 @@ import commands2
 import ntcore
 from wpilib import Timer
 
+from constants import DEBUG_NT
 from subsystems.intake import DEPLOY_POSITION, STOW_POSITION, IntakeSubSystem
 
 # Auto-tune constants
@@ -85,11 +86,12 @@ class AutoTuneIntakeCommand(commands2.Command):
 
         self.intake.set_arm_pid_gains(kp, ki, kd)
 
-        self._ku_pub.set(ku)
-        self._tu_pub.set(tu)
-        self._kp_pub.set(kp)
-        self._ki_pub.set(ki)
-        self._kd_pub.set(kd)
+        if DEBUG_NT:
+            self._ku_pub.set(ku)
+            self._tu_pub.set(tu)
+            self._kp_pub.set(kp)
+            self._ki_pub.set(ki)
+            self._kd_pub.set(kd)
 
     def isFinished(self) -> bool:
         if self._timed_out:

@@ -4,7 +4,7 @@ import commands2
 import ntcore
 from wpilib import Timer
 
-from constants import NEO_FREE_SPEED_RPM
+from constants import DEBUG_NT, NEO_FREE_SPEED_RPM
 from subsystems.kicker import KickerSubSystem
 
 # Auto-tune constants
@@ -107,12 +107,13 @@ class AutoTuneKickerCommand(commands2.Command):
         kp = 0.45 * ku
         ki = 0.54 * ku / tu
 
-        self._ku_pub.set(ku)
-        self._tu_pub.set(tu)
-        self._kp_pub.set(kp)
-        self._ki_pub.set(ki)
-        self._kd_pub.set(0.0)
-        self._amplitude_pub.set(amplitude)
+        if DEBUG_NT:
+            self._ku_pub.set(ku)
+            self._tu_pub.set(tu)
+            self._kp_pub.set(kp)
+            self._ki_pub.set(ki)
+            self._kd_pub.set(0.0)
+            self._amplitude_pub.set(amplitude)
 
     def end(self, interrupted: bool) -> None:
         self.kicker.stop()

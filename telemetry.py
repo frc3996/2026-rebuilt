@@ -4,6 +4,8 @@ from wpilib import Color, Color8Bit, Mechanism2d, MechanismLigament2d, SmartDash
 from wpimath.geometry import Pose2d
 from wpimath.kinematics import ChassisSpeeds, SwerveModulePosition, SwerveModuleState
 
+from constants import DEBUG_NT
+
 
 class Telemetry:
     def __init__(self, max_speed: units.meters_per_second):
@@ -14,7 +16,7 @@ class Telemetry:
         :type max_speed: units.meters_per_second
         """
         self._max_speed = max_speed
-        # SignalLogger.start()
+        SignalLogger.stop()
 
         # What to publish over networktables for telemetry
         self._inst = NetworkTableInstance.getDefault()
@@ -79,17 +81,21 @@ class Telemetry:
         Accept the swerve drive state and telemeterize it to SmartDashboard and SignalLogger.
         """
         # Telemeterize the swerve drive state
+        self._drive_timestamp.set(state.timestamp)
         self._drive_pose.set(state.pose)
         self._drive_speeds.set(state.speeds)
+        SignalLogger.write_struct("DriveState/Pose", Pose2d, state.pose)
+        SignalLogger.write_struct("DriveState/Speeds", ChassisSpeeds, state.speeds)
+
+        if not DEBUG_NT:
+            return
+
         self._drive_module_states.set(state.module_states)
         self._drive_module_targets.set(state.module_targets)
         self._drive_module_positions.set(state.module_positions)
-        self._drive_timestamp.set(state.timestamp)
         self._drive_odometry_frequency.set(1.0 / state.odometry_period)
 
         # Also write to log file
-        SignalLogger.write_struct("DriveState/Pose", Pose2d, state.pose)
-        SignalLogger.write_struct("DriveState/Speeds", ChassisSpeeds, state.speeds)
         SignalLogger.write_struct_array("DriveState/ModuleStates", SwerveModuleState, state.module_states)
         SignalLogger.write_struct_array("DriveState/ModuleTargets", SwerveModuleState, state.module_targets)
         SignalLogger.write_struct_array("DriveState/ModulePositions", SwerveModulePosition, state.module_positions)
