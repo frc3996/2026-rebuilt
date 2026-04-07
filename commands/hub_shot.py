@@ -251,6 +251,9 @@ class HubShot(Command):
     def end(self, interrupted: bool):
         PPHolonomicDriveController.setRotationTargetOverride(None)
         self._feeding_pub.set(False)
+        self.shooter.stop()
+        self.kicker.stop()
+        self.indexer.stop()
         self.hood.stow()
 
     def isFinished(self) -> bool:
