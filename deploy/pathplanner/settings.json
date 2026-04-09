@@ -3,15 +3,12 @@
   "robotLength": 0.9,
   "holonomicMode": true,
   "pathFolders": [
+    "new_auto",
     "depot",
     "feed",
     "intake"
   ],
-  "autoFolders": [
-    "intake",
-    "depot",
-    "feed"
-  ],
+  "autoFolders": [],
   "defaultMaxVel": 3.0,
   "defaultMaxAccel": 3.0,
   "defaultMaxAngVel": 540.0,
