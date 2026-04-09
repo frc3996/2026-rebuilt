@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "top_trench_to_center"
+            "pathName": "right_to_shoot"
           }
         },
         {
@@ -15,40 +15,9 @@
           "data": {
             "commands": [
               {
-                "type": "path",
-                "data": {
-                  "pathName": "top_intake"
-                }
-              },
-              {
-                "type": "named",
-                "data": {
-                  "name": "intake"
-                }
-              }
-            ]
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "stop intake"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "top_return"
-          }
-        },
-        {
-          "type": "parallel",
-          "data": {
-            "commands": [
-              {
                 "type": "wait",
                 "data": {
-                  "waitTime": 15.0
+                  "waitTime": 6.0
                 }
               },
               {
@@ -64,6 +33,24 @@
           "type": "named",
           "data": {
             "name": "clearout"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climb"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "right_climb"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climb retract"
           }
         }
       ]

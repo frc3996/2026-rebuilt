@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "line_bottom_to_shoot"
+            "pathName": "center_to_shoot_left"
           }
         },
         {
@@ -33,6 +33,24 @@
           "type": "named",
           "data": {
             "name": "clearout"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climb"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "left_climb"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climb retract"
           }
         }
       ]

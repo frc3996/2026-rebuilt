@@ -5,8 +5,8 @@ from commands2 import Subsystem
 from constants import DEBUG_NT, NEO_FREE_SPEED_RPM, CANIds
 
 # Arm positions — absolute encoder reads 0‥1 turns
-DEPLOY_POSITION = 0.5  # Fully deployed  # TUNE
-STOW_POSITION = 0.219  # Retracted/stowed  # TUNE
+DEPLOY_POSITION = 0.81  # Fully deployed  # TUNE
+STOW_POSITION = 0.525  # Retracted/stowed  # TUNE
 
 
 # Position tolerance — "at target" threshold (absolute encoder turns)

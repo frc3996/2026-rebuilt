@@ -134,8 +134,13 @@ class RobotContainer:
         )
         NamedCommands.registerCommand("stop intake", cmd.runOnce(
                 lambda: (
-                    self.intake.stow(),
-                    self.intake.set_roller_duty_cycle(0.0),
+                    self.intake.set_roller_duty_cycle(0.0)
+                ), self.intake
+            )
+        )
+        NamedCommands.registerCommand("stow intake", cmd.runOnce(
+                lambda: (
+                    self.intake.stow()
                 ), self.intake
             )
         )
