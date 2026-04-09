@@ -13,13 +13,13 @@ class IndexerSubSystem(Subsystem):
 
     def __init__(self):
         super().__init__()
-        self._motor = rev.SparkMax(CANIds.INDEXER, rev.SparkMax.MotorType.kBrushed)
+        self._motor = rev.SparkMax(CANIds.INDEXER, rev.SparkMax.MotorType.kBrushless)
 
         config = rev.SparkBaseConfig()
         config.inverted(True)  # positive = toward kicker (upward)
-        config.voltageCompensation(10)
-        config.smartCurrentLimit(20)
-        config.secondaryCurrentLimit(30)
+        config.voltageCompensation(11)
+        config.smartCurrentLimit(25)
+        config.secondaryCurrentLimit(35)
         config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._motor.configure(
             config,
