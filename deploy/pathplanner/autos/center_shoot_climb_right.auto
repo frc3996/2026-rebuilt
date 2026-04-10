@@ -44,13 +44,19 @@
         {
           "type": "path",
           "data": {
-            "pathName": "right_climb"
+            "pathName": "center_right_climb"
           }
         },
         {
           "type": "named",
           "data": {
             "name": "climb retract"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "brake"
           }
         }
       ]

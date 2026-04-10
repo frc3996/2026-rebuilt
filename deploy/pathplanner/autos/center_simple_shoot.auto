@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "left_to_shoot"
+            "pathName": "center_taxi"
           }
         },
         {
@@ -33,30 +33,6 @@
           "type": "named",
           "data": {
             "name": "clearout"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "climb"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "leftmost_climb"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "climb retract"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "brake"
           }
         }
       ]
