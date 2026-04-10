@@ -556,7 +556,7 @@ class RobotContainer:
             )
         )
 
-        self._joystick_1.b().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
+        self._joystick_2.rightTrigger().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
             self._hubshot_preheat
         )
 
@@ -606,6 +606,7 @@ class RobotContainer:
         self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
         self._joystick_2.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
+        self._joystick_2.a().onTrue(cmd.runOnce(self.intake.deploy, self.intake))
 
 
         self._joystick_1.rightBumper().whileTrue(self._dump_shot)
