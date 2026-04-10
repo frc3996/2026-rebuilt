@@ -307,3 +307,54 @@ class HubShot(Command):
 
     def isFinished(self) -> bool:
         return False
+
+
+class HubShotPreheat(Command):
+    """
+    Preheat the shooter at the target speed
+    """
+
+    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal):
+        super().__init__()
+        self.shooter = shooter
+        self.kicker = kicker
+        self.indexer = indexer
+        self.hood = hood
+        self._virtual_goal = virtual_goal
+
+        self.addRequirements(shooter, kicker, indexer, hood)
+
+        table = ntcore.NetworkTableInstance.getDefault().getTable("ShootPreheat")
+        self._distance_pub = table.getDoubleTopic("Distance To Hub").publish()
+        self._target_rpm_pub = table.getDoubleTopic("Target RPM").publish()
+        self._current_rpm_pub = table.getDoubleTopic("Current RPM").publish()
+        self._rpm_error_pub = table.getDoubleTopic("RPM Error").publish()
+        self._target_hood_pub = table.getDoubleTopic("Target Hood Turns").publish()
+
+    def initialize(self):
+        pass
+
+    def execute(self):
+        vg = self._virtual_goal
+        vg.calculate_operator()
+        target_rpm = vg.last_rpm
+        target_hood = vg.last_hood_turns
+
+        self.shooter.set_target_speed(target_rpm)
+        self.hood.set_target_position(target_hood)
+
+        self.indexer.set_target_output(-0.3)
+
+        if DEBUG_NT:
+            current_rpm = self.shooter.get_current_speed()
+            self._distance_pub.set(vg.last_virtual_distance)
+            self._target_rpm_pub.set(target_rpm)
+            self._current_rpm_pub.set(current_rpm)
+            self._rpm_error_pub.set(abs(current_rpm - target_rpm))
+            self._target_hood_pub.set(target_hood)
+
+    def end(self, interrupted: bool):
+        pass
+
+    def isFinished(self) -> bool:
+        return False

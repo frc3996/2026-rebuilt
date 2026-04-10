@@ -31,7 +31,7 @@ from commands.auto_tune_kicker import AutoTuneKickerCommand
 from commands.auto_tune_shooter import AutoTuneShooterCommand
 from commands.calibrate_ff import CalibrateFF
 from commands.home_hood import HomeHood
-from commands.hub_shot import HubShot, VirtualGoal
+from commands.hub_shot import HubShot, VirtualGoal, HubShotPreheat
 from commands.tune_shot import TuneShot
 from generated.tuner_constants import TunerConstants
 from subsystems.hood import HOMING_TIMEOUT_SECONDS, HoodSubSystem
@@ -148,16 +148,33 @@ class RobotContainer:
         NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
 
         # ── Named Commands for auto sequencing ──
+        # Aim request for auto — calls set_control directly to avoid requiring
+        # the drivetrain subsystem (PathPlanner already owns it).
+        def _auto_aim_at_hub():
+            aim, ff = self._virtual_goal.calculate_operator()
+            self.drivetrain.set_control(
+                self._snap_angle.with_target_direction(aim)
+                .with_target_rate_feedforward(ff)
+                .with_velocity_x(0)
+                .with_velocity_y(0)
+            )
+
         NamedCommands.registerCommand(
             "shoot",
-            HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+            ParallelCommandGroup(
+                HubShot(
+                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+                ),
+                cmd.run(_auto_aim_at_hub),
             ),
         )
         NamedCommands.registerCommand(
             "hubshot",
-            HubShot(
-                self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+            ParallelCommandGroup(
+                HubShot(
+                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+                ),
+                cmd.run(_auto_aim_at_hub),
             ),
         )
 
@@ -505,6 +522,10 @@ class RobotContainer:
         self._shoot_at_hub = HubShot(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
         )
+        self._hubshot_preheat = HubShotPreheat(
+            self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+        )
+
         _SHOOT_DRIVE_SCALE = (
             0.25  # Limit swerve to 25% while shooting to prevent brownouts
         )
@@ -534,6 +555,11 @@ class RobotContainer:
                 self.drivetrain.apply_request(_hub_shot_request),
             )
         )
+
+        self._joystick_1.b().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
+            self._hubshot_preheat
+        )
+
         # When RT is released, run Clearout to reverse indexer briefly
         self._joystick_1.rightTrigger().onFalse(
             Clearout(
