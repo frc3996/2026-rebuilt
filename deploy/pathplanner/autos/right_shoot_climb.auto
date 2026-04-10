@@ -42,21 +42,34 @@
           }
         },
         {
-          "type": "path",
+          "type": "deadline",
           "data": {
-            "pathName": "rightmost_climb"
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "climb retract"
+            "commands": [
+              {
+                "type": "wait",
+                "data": {
+                  "waitTime": 5.0
+                }
+              },
+              {
+                "type": "path",
+                "data": {
+                  "pathName": "rightmost_climb"
+                }
+              }
+            ]
           }
         },
         {
           "type": "named",
           "data": {
             "name": "brake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "climb retract"
           }
         }
       ]

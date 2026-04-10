@@ -144,6 +144,12 @@ class RobotContainer:
                 ), self.intake
             )
         )
+        NamedCommands.registerCommand("deploy intake", cmd.runOnce(
+                lambda: (
+                    self.intake.deploy()
+                ), self.intake
+            )
+        )
         NamedCommands.registerCommand("climb", ExtendClimb(self.climber))
         NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
 
@@ -568,7 +574,7 @@ class RobotContainer:
         )
 
         # LT: Hold to deploy intake arm + spin rollers (speed limited)
-        _INTAKE_DRIVE_SCALE = 0.50  # Limit swerve to 50% while intaking  # TUNE
+        _INTAKE_DRIVE_SCALE = 0.3  # Limit swerve to 30% while intaking  # TUNE
 
         def _intake_drive_request():
             return (
