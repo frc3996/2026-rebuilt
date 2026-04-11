@@ -39,6 +39,7 @@ from subsystems.indexer import IndexerSubSystem
 from subsystems.intake import DEPLOY_POSITION, STOW_POSITION, IntakeSubSystem
 from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
+from subsystems.shaker import ShakerSubSystem
 from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
 
@@ -122,6 +123,7 @@ class RobotContainer:
         self.intake = IntakeSubSystem()
         self.kicker = KickerSubSystem()
         self.indexer = IndexerSubSystem()
+        self.shaker = ShakerSubSystem()
 
         # Default commands — ensure motors stop when no command is running
         self.shooter.setDefaultCommand(self.shooter.run(self.shooter.stop))
@@ -592,7 +594,12 @@ class RobotContainer:
                 .with_velocity_y(shake * field_aim.sin())
             )
 
+
+        # LB: Hold to run shaker motor (offset weight vibration to help index balls)
         self._joystick_1.leftBumper().whileTrue(cmd.run(_shake_drive))
+        # self._joystick_1.leftBumper().whileTrue(
+        #     cmd.runEnd(self.shaker.run_shaker, self.shaker.stop, self.shaker)
+        # )
 
         self._joystick_2.rightTrigger().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
             self._hubshot_preheat
@@ -801,7 +808,17 @@ class RobotContainer:
         self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
 
 
-
+        # LT: Dump ball through intake
+        self._joystick_1.x().whileTrue(
+            cmd.runEnd(
+                lambda: (
+                    self.intake.dump_balls(),
+                    self.intake.set_roller_duty_cycle(-1.0),
+                ),
+                lambda: self.intake.set_roller_duty_cycle(0),
+                self.intake,
+            )
+        )
 
 
         # RB: Home hood

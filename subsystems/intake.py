@@ -6,7 +6,8 @@ from constants import DEBUG_NT, NEO_FREE_SPEED_RPM, CANIds
 
 # Arm positions — absolute encoder reads 0‥1 turns
 DEPLOY_POSITION = 0.45  # Fully deployed  # TUNE
-STOW_POSITION = 0.130  # Retracted/stowed  # TUNE
+STOW_POSITION = 0.13  # Retracted/stowed  # TUNE
+DUMP_BALL_POSITION = DEPLOY_POSITION - 0.7  # Fully deployed  # TUNE
 
 
 # Position tolerance — "at target" threshold (absolute encoder turns)
@@ -167,6 +168,10 @@ class IntakeSubSystem(Subsystem):
             rev.SparkBase.ControlType.kPosition,
             rev.ClosedLoopSlot.kSlot0,
         )
+
+    def dump_balls(self) -> None:
+        """Move arm to DUMP_BALL_POSITION."""
+        self.set_arm_target_position(DUMP_BALL_POSITION)
 
     def deploy(self) -> None:
         """Move arm to DEPLOY_POSITION."""
