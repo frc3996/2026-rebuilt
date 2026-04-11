@@ -211,15 +211,16 @@ class HubShot(Command):
     Stages motors (shooter → kicker → conveyor) and adjusts hood position.
     """
 
-    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal):
+    def __init__(self, shooter, kicker, indexer, hood, virtual_goal: VirtualGoal, shaker):
         super().__init__()
         self.shooter = shooter
         self.kicker = kicker
         self.indexer = indexer
         self.hood = hood
         self._virtual_goal = virtual_goal
+        self._shaker = shaker
 
-        self.addRequirements(shooter, kicker, indexer, hood)
+        self.addRequirements(shooter, kicker, indexer, hood, shaker)
 
         self._feed_timer = Timer()
         self._speed_steady_timer = Timer()
@@ -250,6 +251,7 @@ class HubShot(Command):
         self._speed_reached = False
         self._aim_reached = False
         self._prev_rpm = 0.0
+        self._shaker.run_shaker()
         PPHolonomicDriveController.setRotationTargetOverride(self._aim_override)
 
     def _aim_override(self):
@@ -301,6 +303,7 @@ class HubShot(Command):
 
     def end(self, interrupted: bool):
         PPHolonomicDriveController.setRotationTargetOverride(None)
+        self._shaker.stop()
         if DEBUG_NT:
             self._feeding_pub.set(False)
         self.hood.stow()

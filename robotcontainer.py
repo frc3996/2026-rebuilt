@@ -181,7 +181,7 @@ class RobotContainer:
             "shoot",
             ParallelCommandGroup(
                 HubShot(
-                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, self.shaker,
                 ),
                 cmd.run(_auto_aim_at_hub),
             ),
@@ -190,7 +190,7 @@ class RobotContainer:
             "hubshot",
             ParallelCommandGroup(
                 HubShot(
-                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+                    self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, self.shaker,
                 ),
                 cmd.run(_auto_aim_at_hub),
             ),
@@ -538,7 +538,7 @@ class RobotContainer:
 
         # RT: Hold to aim at hub + shoot (auto RPM + hood from lookup table)
         self._shoot_at_hub = HubShot(
-            self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
+            self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal, self.shaker,
         )
         self._hubshot_preheat = HubShotPreheat(
             self.shooter, self.kicker, self.indexer, self.hood, self._virtual_goal
@@ -578,6 +578,24 @@ class RobotContainer:
         self._joystick_1.rightTrigger().onFalse(
             Clearout(
                 self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
+            )
+        )
+
+        # LT: Dump ball through intake
+        self._joystick_1.x().whileTrue(
+            cmd.runEnd(
+                lambda: (
+                    # self.intake.dump_balls(),
+                    self.indexer.set_target_output(-0.3),
+                    self.shaker.run_shaker(),
+                    self.intake.set_roller_duty_cycle(-1.0),
+                ),
+                lambda: (
+                    self.indexer.set_target_output(0.0),
+                    self.shaker.stop(),
+                    self.intake.set_roller_duty_cycle(0.0),
+                ),
+                self.intake, self.indexer, self.shaker
             )
         )
 
@@ -806,20 +824,6 @@ class RobotContainer:
 
         # Y: Stow intake arm
         self._joystick_1.y().onTrue(cmd.runOnce(self.intake.stow, self.intake))
-
-
-        # LT: Dump ball through intake
-        self._joystick_1.x().whileTrue(
-            cmd.runEnd(
-                lambda: (
-                    self.intake.dump_balls(),
-                    self.intake.set_roller_duty_cycle(-1.0),
-                ),
-                lambda: self.intake.set_roller_duty_cycle(0),
-                self.intake,
-            )
-        )
-
 
         # RB: Home hood
         self._joystick_2.rightBumper().onTrue(

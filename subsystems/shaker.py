@@ -29,11 +29,8 @@ class ShakerSubSystem(Subsystem):
 
     def run_shaker(self):
         """Spin the offset weight at full duty cycle."""
-        print("SHAKING")
         self._motor.set(self.SHAKER_OUTPUT)
 
     def stop(self):
         """Stop the shaker motor."""
-        print("SHAKING STOP")
-
         self._motor.stopMotor()
