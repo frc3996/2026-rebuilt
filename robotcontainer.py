@@ -16,7 +16,7 @@ from pathplannerlib.events import EventTrigger
 from pathplannerlib.util import FlippingUtil
 from phoenix6 import swerve
 from rev import StatusLogger
-from wpilib import DriverStation, SmartDashboard
+from wpilib import DriverStation, SmartDashboard, Timer
 from wpimath.geometry import Pose2d, Rotation2d
 from wpimath.units import rotationsToRadians
 
@@ -41,6 +41,12 @@ from subsystems.kicker import KickerSubSystem
 from subsystems.shooter import ShooterSubSystem
 from subsystems.vision import CAMERAS, VisionSubsystem
 from telemetry import Telemetry
+
+
+
+# Shake parameters — rapid front-to-back oscillation to help index balls
+_SHAKE_FREQ_HZ = 4.0  # oscillation frequency  # TUNE
+_SHAKE_SPEED_MPS = 0.7  # peak shake velocity in m/s  # TUNE
 
 
 def joystick_filter(value):
@@ -105,6 +111,10 @@ class RobotContainer:
 
         # Add vision
         self.limelight = VisionSubsystem(swerve=self.drivetrain, cameras=CAMERAS)
+
+
+        self._shake_timer = Timer()
+        self._shake_timer.start()
 
         self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
@@ -562,16 +572,32 @@ class RobotContainer:
             )
         )
 
-        self._joystick_2.rightTrigger().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
-            self._hubshot_preheat
-        )
-
         # When RT is released, run Clearout to reverse indexer briefly
         self._joystick_1.rightTrigger().onFalse(
             Clearout(
                 self.shooter, self.kicker, self.indexer, self._virtual_goal.last_rpm
             )
         )
+
+        # LB: Hold to shake the robot toward/away from hub to help index balls
+        def _shake_drive():
+            aim, ff = self._virtual_goal.calculate_operator()
+            # Use field-absolute angle to hub for shake direction
+            field_aim = self._virtual_goal.calculate()[0]
+            shake = math.sin(2.0 * math.pi * _SHAKE_FREQ_HZ * self._shake_timer.get()) * _SHAKE_SPEED_MPS
+            self.drivetrain.set_control(
+                self._snap_angle.with_target_direction(aim)
+                .with_target_rate_feedforward(ff)
+                .with_velocity_x(shake * field_aim.cos())
+                .with_velocity_y(shake * field_aim.sin())
+            )
+
+        self._joystick_1.leftBumper().whileTrue(cmd.run(_shake_drive))
+
+        self._joystick_2.rightTrigger().and_(self._joystick_1.rightTrigger().negate()).whileTrue(
+            self._hubshot_preheat
+        )
+
 
         # LT: Hold to deploy intake arm + spin rollers (speed limited)
         _INTAKE_DRIVE_SCALE = 0.3  # Limit swerve to 30% while intaking  # TUNE

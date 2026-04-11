@@ -63,8 +63,8 @@ class KickerSubSystem(Subsystem):
         self._left_closed_loop = self._left_motor.getClosedLoopController()
 
         self._right_config = rev.SparkBaseConfig()
-        self._right_config.voltageCompensation(10)
-        self._right_config.smartCurrentLimit(30)
+        self._right_config.voltageCompensation(12)
+        self._right_config.smartCurrentLimit(40)
         self._right_config.secondaryCurrentLimit(40)
         self._right_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._right_config.closedLoop.setFeedbackSensor(rev.FeedbackSensor.kPrimaryEncoder)
@@ -76,8 +76,8 @@ class KickerSubSystem(Subsystem):
         )
 
         self._left_config = rev.SparkBaseConfig()
-        self._left_config.voltageCompensation(10)
-        self._left_config.smartCurrentLimit(30)
+        self._left_config.voltageCompensation(12)
+        self._left_config.smartCurrentLimit(40)
         self._left_config.secondaryCurrentLimit(40)
         self._left_config.IdleMode(rev.SparkBaseConfig.IdleMode.kCoast)
         self._left_config.inverted(True)
