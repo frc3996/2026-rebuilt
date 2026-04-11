@@ -22,8 +22,8 @@ from wpimath.units import rotationsToRadians
 
 from commands.clearout import Clearout
 from commands.dump_shot import DUMP_RPM, DumpShot
-from subsystems.climb import ClimbSubsystem
-from commands.climb_commands import ExtendClimb, RetractClimb
+# from subsystems.climb import ClimbSubsystem
+# from commands.climb_commands import ExtendClimb, RetractClimb
 from commands.auto_home import AutoHome
 from commands.auto_tune_hood import AutoTuneHoodCommand
 from commands.auto_tune_intake import AutoTuneIntakeCommand
@@ -117,7 +117,7 @@ class RobotContainer:
         self._shake_timer = Timer()
         self._shake_timer.start()
 
-        self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
+        # self.climber = ClimbSubsystem()  # Disabled — PCM not on CAN bus yet
         self.shooter = ShooterSubSystem()
         self.hood = HoodSubSystem()
         self.intake = IntakeSubSystem()
@@ -162,8 +162,10 @@ class RobotContainer:
                 ), self.intake
             )
         )
-        NamedCommands.registerCommand("climb", ExtendClimb(self.climber))
-        NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
+        NamedCommands.registerCommand("climb", cmd.none())
+        NamedCommands.registerCommand("climb retract", cmd.none())
+        # NamedCommands.registerCommand("climb", ExtendClimb(self.climber))
+        # NamedCommands.registerCommand("climb retract", RetractClimb(self.climber))
 
         # ── Named Commands for auto sequencing ──
         # Aim request for auto — calls set_control directly to avoid requiring
@@ -681,8 +683,8 @@ class RobotContainer:
         self._joystick_1.back().onTrue(AutoHome(self.hood))
 
         # Climb function — disabled until PCM is on CAN bus
-        self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
-        self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
+        # self._joystick_1.povUp().onTrue(ExtendClimb(self.climber))
+        # self._joystick_1.povDown().onTrue(RetractClimb(self.climber))
 
         # Joystick 2 bindings
         # POV Up: Enable MegaTag2 while held
