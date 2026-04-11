@@ -38,6 +38,7 @@ class CANIds:
 
     # Shaker — offset weight motor for ball agitation
     SHAKER = 49
+    SHAKER_2 = 50
 
 
 class PneumaticChannels:

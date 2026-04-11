@@ -16,6 +16,7 @@ class ShakerSubSystem(Subsystem):
     def __init__(self):
         super().__init__()
         self._motor = rev.SparkMax(CANIds.SHAKER, rev.SparkMax.MotorType.kBrushless)
+        self._motor_2 = rev.SparkMax(CANIds.SHAKER_2, rev.SparkMax.MotorType.kBrushless)
 
         config = rev.SparkBaseConfig()
         config.voltageCompensation(12)
@@ -27,10 +28,18 @@ class ShakerSubSystem(Subsystem):
             rev.PersistMode.kPersistParameters,
         )
 
+        self._motor_2.configure(
+            config,
+            rev.ResetMode.kResetSafeParameters,
+            rev.PersistMode.kPersistParameters,
+        )
+
     def run_shaker(self):
         """Spin the offset weight at full duty cycle."""
         self._motor.set(self.SHAKER_OUTPUT)
+        self._motor_2.set(self.SHAKER_OUTPUT)
 
     def stop(self):
         """Stop the shaker motor."""
         self._motor.stopMotor()
+        self._motor_2.stopMotor()
